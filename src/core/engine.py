@@ -1,8 +1,11 @@
 """
 Core simulation engine for Dao Den Long (Island of Lanterns).
-Implements Test Contract v1.1 specifications: 3 Nights, standardized tuning,
-strict 12-step tick execution, jump pads, Drifters, Wind Charms, cliff collisions,
-and falling physics.
+Implements Test Contract v1.2 specifications (Ticket-03 "Đèn cạn dầu"):
+- Lantern fuel & decay (1.0/s)
+- Shade fuel draining (5.0/s) & weak lantern targeting (fuel < 30)
+- Dawn survival win condition (>= 60% lanterns lit at dawn)
+- Dynamic carry capacity based on successful lights
+- Complete v1.2 scoring, snapshot format, and events
 """
 
 import json
@@ -18,7 +21,8 @@ class Player:
         self.grounded = True
         self.flames = int(flames)
         self.carried = int(carried)
-        self.facing_yaw = 0.0  # Facing angle in degrees
+        self.facing_yaw = 0.0
+        self.successful_lights = 0
 
         # Timers in ticks
         self.invuln_ticks = 0
@@ -35,6 +39,10 @@ class Player:
         self.is_falling = False
         self.fall_respawn_delay = 0
 
+    @property
+    def capacity(self) -> int:
+        return min(20, 10 + 2 * self.successful_lights)
+
 
 class Lantern:
     def __init__(self, id: str, pos: List[float], lit: bool = False, deposited: int = 0):
@@ -42,7 +50,16 @@ class Lantern:
         self.pos = [float(pos[0]), float(pos[1]), float(pos[2])]
         self.lit = bool(lit)
         self.deposited = int(deposited)
-        self.just_lit_ticks = 0  # To push out shades when recently lit
+        self.fuel_ticks = 6000 if self.lit else 0  # 60 ticks = 1.0 fuel unit
+        self.ever_lit = bool(lit)
+        self.relit_count = 0
+        self.just_lit_ticks = 0
+
+    @property
+    def fuel(self) -> float:
+        if not self.lit or self.fuel_ticks <= 0:
+            return 0.0
+        return round(self.fuel_ticks / 60.0, 1)
 
 
 class Shade:
@@ -52,11 +69,14 @@ class Shade:
         pos: List[float],
         state: str = "spawning",
         state_ticks_left: int = 0,
+        target_lantern_id: Optional[str] = None,
     ):
         self.id = id
         self.pos = [float(pos[0]), float(pos[1]), float(pos[2])]
-        self.state = state  # "spawning", "wander", "chase", "recoil", "stunned"
+        self.state = state  # "spawning", "wander", "chase", "recoil", "stunned", "drain"
         self.state_ticks_left = state_ticks_left
+        self.target_lantern_id = target_lantern_id
+        self.drain_timer = 0
         self.stun_push_dir = [0.0, 0.0]
         self.recoil_dir = [0.0, 0.0]
         self.recoil_ticks = 0
@@ -84,7 +104,7 @@ class Mote:
     def __init__(self, id: str, pos: List[float], kind: str = "random", ttl_ticks: int = 0):
         self.id = id
         self.pos = [float(pos[0]), float(pos[1]), float(pos[2])]
-        self.kind = kind  # "random" or "dropped"
+        self.kind = kind
         self.ttl_ticks = ttl_ticks
         self.can_pickup = True if kind == "random" else False
 
@@ -112,40 +132,50 @@ class DaoDenLongSim:
         self.night = int(night)
         self.snapshot_every = max(1, int(snapshot_every))
 
-        # Standardized tuning matching Ticket-02 / Contract v1.1
+        # Standardized tuning matching Ticket-03 / Contract v1.2
         self.tuning = {
             "player_speed": 6.0,
             "dash_speed": 14.0,
             "dash_duration_s": 0.2,
             "dash_cooldown_s": 1.5,
             "carry_capacity": 10,
+            "capacity_max": 20,
             "lantern_cost": 10,
+            "relight_cost": 5,
             "lantern_count_night1": 5,
             "lantern_count_night2": 6,
             "lantern_count_night3": 7,
+            "fuel_max": 100,
+            "fuel_decay_per_s": 1.0,
+            "fuel_per_mote": 10,
+            "drain_per_s": 5,
+            "low_fuel_threshold": 30,
+            "win_ratio": 0.6,
             "pickup_radius": 1.0,
             "interact_radius": 2.0,
             "pulse_cost": 3,
             "pulse_radius": 5.0,
-            "pulse_stun_s": 2.0,  # 120 ticks
+            "pulse_stun_s": 2.0,
             "pulse_push_m": 4.0,
             "pulse_cooldown_s": 3.0,
             "safe_radius": 6.0,
             "shade_speed": 4.0 if self.night < 3 else 4.5,
             "shade_speed_night3": 4.5,
             "shade_hit_radius": 1.0,
-            "night1_duration_s": 300,
-            "night2_duration_s": 330,
-            "night3_duration_s": 360,
+            "night1_duration_s": 240,
+            "night2_duration_s": 270,
+            "night3_duration_s": 300,
             "flames": 3,
             "invuln_s": 1.5,
             "hit_drop_ratio": 0.5,
             "fall_enabled": True,
             "score": {
-                "per_mote": 10,
+                "per_mote": 5,
                 "per_lantern": 100,
+                "per_relight": 40,
                 "per_stun": 5,
-                "per_second_left": 2,
+                "per_stun_drain": 15,
+                "per_lit_lantern": 50,
                 "per_flame_left": 50,
             },
         }
@@ -153,9 +183,9 @@ class DaoDenLongSim:
             self.tuning.update(tuning)
 
         duration_key = f"night{self.night}_duration_s"
-        self.time_left_s = float(self.tuning.get(duration_key, 300))
+        self.time_left_s = float(self.tuning.get(duration_key, 240))
         self.score = 0
-        self.state = "playing"  # "playing", "paused", "won", "lost"
+        self.state = "playing"
         self.is_paused = False
         self.sim_tick = 0
         self.next_mote_id = 1
@@ -306,6 +336,8 @@ class DaoDenLongSim:
                 self.player.pulse_cd_ticks = int(p_data["pulse_cd_ticks"])
             if "charm_ticks" in p_data:
                 self.player.charm_ticks = int(p_data["charm_ticks"])
+            if "successful_lights" in p_data:
+                self.player.successful_lights = int(p_data["successful_lights"])
 
         if sc.get("random_motes") is False:
             self.motes = []
@@ -325,6 +357,7 @@ class DaoDenLongSim:
                     [float(item["pos"][0]), float(item["pos"][1]), float(item["pos"][2])],
                     state=item.get("state", "chase"),
                     state_ticks_left=item.get("state_ticks_left", 0),
+                    target_lantern_id=item.get("target_lantern_id"),
                 )
                 for i, item in enumerate(sc["shades"])
             ]
@@ -355,8 +388,23 @@ class DaoDenLongSim:
                     target.pos = [float(x) for x in item["pos"]]
                 if "deposited" in item:
                     target.deposited = int(item["deposited"])
+                if "ever_lit" in item:
+                    target.ever_lit = bool(item["ever_lit"])
                 if "lit" in item:
                     target.lit = bool(item["lit"])
+                    if target.lit:
+                        target.ever_lit = True
+                        if "fuel" in item:
+                            target.fuel_ticks = int(round(float(item["fuel"]) * 60))
+                        else:
+                            target.fuel_ticks = 6000  # Default 100 fuel
+                    else:
+                        target.fuel_ticks = 0
+                elif "fuel" in item:
+                    target.fuel_ticks = int(round(float(item["fuel"]) * 60))
+                    if target.fuel_ticks > 0:
+                        target.lit = True
+                        target.ever_lit = True
 
     def _parse_inputs(self, inp: Dict[str, Any]):
         if not isinstance(inp, dict) or "frames" not in inp:
@@ -405,12 +453,11 @@ class DaoDenLongSim:
             if dist > 45.0:
                 return None
             if dist <= 2.0:
-                return 6.0  # Bell tower base / top
+                return 6.0
             if dist <= 8.0:
-                return 6.0  # Tier 2
+                return 6.0
             if 12.0 <= dist <= 24.0 and z > 0:
-                return 3.0  # Tier 1
-            # Ramps at 30° and 150° from r=30 (Y=0) to r=24 (Y=3)
+                return 3.0
             angle_deg = math.degrees(math.atan2(z, x)) % 360
             for ramp_angle in [30.0, 150.0]:
                 if abs(angle_deg - ramp_angle) <= 3.5:
@@ -439,6 +486,7 @@ class DaoDenLongSim:
                 "invuln": self.player.invuln_ticks > 0,
                 "flames": self.player.flames,
                 "carried": self.player.carried,
+                "capacity": self.player.capacity,
                 "dash_cd_s": round(self.player.dash_cd_ticks / 60.0, 1),
                 "pulse_cd_s": round(self.player.pulse_cd_ticks / 60.0, 1),
                 "charm_s": round(self.player.charm_ticks / 60.0, 1),
@@ -449,6 +497,9 @@ class DaoDenLongSim:
                     "pos": [round(x, 3) for x in lan.pos],
                     "lit": lan.lit,
                     "deposited": lan.deposited,
+                    "fuel": lan.fuel,
+                    "ever_lit": lan.ever_lit,
+                    "relit_count": lan.relit_count,
                 }
                 for lan in self.lanterns
             ],
@@ -552,7 +603,7 @@ class DaoDenLongSim:
             jump_triggered = self.cur_jump and not prev_jump
             dash_triggered = self.cur_dash and not prev_dash
 
-            # 2. Decrease counters
+            # 2. Decrease counters & Fuel decay / drain
             self.time_left_s = max(0.0, self.time_left_s - dt)
             if self.player.invuln_ticks > 0:
                 self.player.invuln_ticks -= 1
@@ -581,6 +632,45 @@ class DaoDenLongSim:
             for m in expired_motes:
                 self.motes.remove(m)
 
+            # Fuel decay and drain
+            for lan in self.lanterns:
+                if lan.lit:
+                    # Self-decay 1.0 fuel/s (1 tick of fuel)
+                    lan.fuel_ticks -= 1
+
+                    # Shade draining (5 fuel/s per shade)
+                    draining_shades = [
+                        s for s in self.shades
+                        if s.state == "drain" and s.target_lantern_id == lan.id
+                    ]
+                    if draining_shades:
+                        lan.fuel_ticks -= 5 * len(draining_shades)
+                        for s in draining_shades:
+                            s.drain_timer += 1
+                        if any(s.drain_timer % 60 == 0 for s in draining_shades):
+                            self._record_event(
+                                next_tick,
+                                "fuel_drain",
+                                {
+                                    "lantern_id": lan.id,
+                                    "shades_count": len(draining_shades),
+                                    "fuel_after": max(0.0, lan.fuel),
+                                },
+                            )
+
+                    # Lantern burnout
+                    if lan.fuel_ticks <= 0:
+                        lan.fuel_ticks = 0
+                        lan.lit = False
+                        lan.deposited = 0
+                        lan.ever_lit = True
+                        self._record_event(next_tick, "lantern_out", {"lantern_id": lan.id, "reason": "fuel_empty"})
+                        for s in draining_shades:
+                            s.state = "wander"
+                            s.target_lantern_id = None
+                            s.drain_timer = 0
+
+            # Wind updates
             if self.wind_enabled:
                 cycle_tick = step % 1800
                 if cycle_tick == 0 and step > 0:
@@ -649,10 +739,9 @@ class DaoDenLongSim:
                         self.player.pos[0] += 2.0 * math.cos(w_rad) * dt
                         self.player.pos[2] += 2.0 * math.sin(w_rad) * dt
 
-                # Cliff & ground collision check
+                # Cliff & ground check
                 ground_y = self._get_ground_height(self.player.pos[0], self.player.pos[2])
                 if ground_y is not None:
-                    # If target ground is significantly higher than player and player is not in air above it, block horizontal movement (cliff)
                     if ground_y > prev_pos[1] + 0.6 and not self.player.in_jump_pad_flight:
                         self.player.pos[0] = prev_pos[0]
                         self.player.pos[2] = prev_pos[2]
@@ -685,7 +774,6 @@ class DaoDenLongSim:
                             self.player.launch_vel = [24.0 * (dx / dist), 0.0, 24.0 * (dz / dist)]
                             self.player.vel[1] = 14.0
                             self.player.grounded = False
-
                     elif self.night == 3:
                         if math.hypot(self.player.pos[0] - 0.0, self.player.pos[2] - 13.0) <= 1.0:
                             self.player.in_jump_pad_flight = True
@@ -693,7 +781,7 @@ class DaoDenLongSim:
                             self.player.vel[1] = 12.0
                             self.player.grounded = False
 
-                # Check falling off island (Y < -10)
+                # Fall off island (Y < -10)
                 if self.player.pos[1] < -10.0 and not self.player.is_falling:
                     self.player.is_falling = True
                     self.player.flames -= 1
@@ -720,7 +808,7 @@ class DaoDenLongSim:
             # 4. Pickup Motes & Charms
             if not self.player.is_falling and self.player.fall_respawn_delay == 0:
                 pickup_r = self.tuning["pickup_radius"]
-                cap = self.tuning["carry_capacity"]
+                cap = self.player.capacity
                 motes_to_remove = []
                 for m in self.motes:
                     if m.can_pickup:
@@ -742,18 +830,22 @@ class DaoDenLongSim:
                             self.player.charm_ticks = 600
                             self._record_event(next_tick, "charm_picked", {"charm_id": c.id, "charm_ticks": 600})
 
-            # 5. Interact with Lanterns
+            # 5. Interact with Lanterns (Deposit / Refuel)
             if interact_triggered and not self.player.is_falling:
                 interact_r = self.tuning["interact_radius"]
+                # Only consider eligible lanterns (unlit, OR lit with fuel < 100)
                 candidates = [
                     lan for lan in self.lanterns
-                    if not lan.lit and dist_xz(self.player.pos, lan.pos) <= interact_r
+                    if (not lan.lit or lan.fuel < 100.0) and dist_xz(self.player.pos, lan.pos) <= interact_r
                 ]
                 if candidates:
                     candidates.sort(key=lambda lan: (dist_xz(self.player.pos, lan.pos), lan.id))
                     target_lan = candidates[0]
-                    if self.player.carried > 0:
-                        needed = self.tuning["lantern_cost"] - target_lan.deposited
+
+                    if not target_lan.lit:
+                        # Light or Relight
+                        cost = self.tuning["relight_cost"] if target_lan.ever_lit else self.tuning["lantern_cost"]
+                        needed = cost - target_lan.deposited
                         amount = min(self.player.carried, needed)
                         if amount > 0:
                             self.player.carried -= amount
@@ -768,25 +860,63 @@ class DaoDenLongSim:
                                     "deposited": target_lan.deposited,
                                 },
                             )
-                            if target_lan.deposited >= self.tuning["lantern_cost"]:
+                            if target_lan.deposited >= cost:
+                                is_relight = target_lan.ever_lit
                                 target_lan.lit = True
+                                target_lan.ever_lit = True
+                                target_lan.fuel_ticks = 6000  # 100 fuel
                                 target_lan.just_lit_ticks = 30
-                                self.score += self.tuning["score"]["per_lantern"]
-                                self._record_event(next_tick, "lantern_lit", {"lantern_id": target_lan.id})
+                                self.player.successful_lights += 1
 
-                                if all(lan.lit for lan in self.lanterns):
-                                    self.state = "won"
-                                    sec_bonus = int(math.floor(self.time_left_s)) * self.tuning["score"]["per_second_left"]
-                                    flame_bonus = self.player.flames * self.tuning["score"]["per_flame_left"]
-                                    self.score += sec_bonus + flame_bonus
-                                    self._record_event(next_tick, "game_over", {"result": "won", "reason": "all_lit"})
-                                    self.sim_tick = next_tick
-                                    break
+                                if is_relight:
+                                    target_lan.relit_count += 1
+                                    self.score += self.tuning["score"]["per_relight"]
+                                else:
+                                    self.score += self.tuning["score"]["per_lantern"]
 
-            # 6. Update Safe Zones
+                                self._record_event(
+                                    next_tick,
+                                    "lantern_lit",
+                                    {
+                                        "lantern_id": target_lan.id,
+                                        "relight": is_relight,
+                                        "new_capacity": self.player.capacity,
+                                    },
+                                )
+
+                    else:
+                        # Refuel lit lantern (fuel < 100)
+                        needed_motes = math.ceil((100.0 - target_lan.fuel) / 10.0)
+                        used = min(self.player.carried, needed_motes)
+                        if used > 0:
+                            self.player.carried -= used
+                            target_lan.fuel_ticks = min(6000, target_lan.fuel_ticks + used * 10 * 60)
+                            self.score += used * self.tuning["score"]["per_mote"]
+                            self._record_event(
+                                next_tick,
+                                "refuel",
+                                {
+                                    "lantern_id": target_lan.id,
+                                    "motes_used": used,
+                                    "amount": used,
+                                    "fuel_after": target_lan.fuel,
+                                    "fuel": target_lan.fuel,
+                                    "player_carried": self.player.carried,
+                                },
+                            )
+                            if target_lan.fuel >= 30.0:
+                                target_lan.just_lit_ticks = 30
+                                # Shades draining this lantern stop draining
+                                for s in self.shades:
+                                    if s.state == "drain" and s.target_lantern_id == target_lan.id:
+                                        s.state = "wander"
+                                        s.target_lantern_id = None
+                                        s.drain_timer = 0
+
+            # 6. Update Safe Zones (Lantern push-out)
             safe_r = self.tuning["safe_radius"]
             for lan in self.lanterns:
-                if lan.lit and lan.just_lit_ticks > 0:
+                if lan.lit and lan.fuel >= 30.0 and lan.just_lit_ticks > 0:
                     lan.just_lit_ticks -= 1
                     for s in self.shades:
                         d = dist_xz(s.pos, lan.pos)
@@ -809,14 +939,18 @@ class DaoDenLongSim:
                     for s in self.shades:
                         d3 = dist_3d(pulse_center, s.pos)
                         if d3 <= pulse_r:
+                            was_drain = (s.state == "drain")
                             s.state = "stunned"
                             s.state_ticks_left = 120
+                            s.target_lantern_id = None
+                            s.drain_timer = 0
                             d_xz = dist_xz(pulse_center, s.pos)
                             if d_xz > 0.001:
                                 s.stun_push_dir = [(s.pos[0] - pulse_center[0]) / d_xz, (s.pos[2] - pulse_center[2]) / d_xz]
                             else:
                                 s.stun_push_dir = [1.0, 0.0]
-                            self.score += self.tuning["score"]["per_stun"]
+
+                            self.score += self.tuning["score"]["per_stun_drain"] if was_drain else self.tuning["score"]["per_stun"]
                             stunned_ids.append(s.id)
 
                     for d in self.drifters:
@@ -853,13 +987,28 @@ class DaoDenLongSim:
                     if s.recoil_ticks <= 0:
                         s.state = "wander"
 
-                elif s.state == "spawning":
-                    s.state = "wander"
+                elif s.state == "drain":
+                    # Shade is draining fuel while standing still
+                    # Check if Mây within 6m -> chase
+                    if dist_xz(s.pos, self.player.pos) <= 6.0:
+                        s.state = "chase"
+                        s.target_lantern_id = None
+                        s.drain_timer = 0
+                    else:
+                        # Check target lantern condition
+                        target_lan = next((lan for lan in self.lanterns if lan.id == s.target_lantern_id), None)
+                        if not target_lan or not target_lan.lit or target_lan.fuel >= 30.0 or dist_xz(s.pos, target_lan.pos) > 2.0:
+                            s.state = "wander"
+                            s.target_lantern_id = None
+                            s.drain_timer = 0
 
-                elif s.state in ["wander", "chase"]:
+                elif s.state in ["spawning", "wander", "chase"]:
                     d_player = dist_xz(s.pos, self.player.pos)
+
+                    # Chase transitions
                     if s.state == "wander" and d_player <= 12.0:
                         s.state = "chase"
+                        s.target_lantern_id = None
                     elif s.state == "chase" and d_player > 18.0:
                         s.state = "wander"
 
@@ -868,8 +1017,9 @@ class DaoDenLongSim:
                         nx = s.pos[0] + (self.player.pos[0] - s.pos[0]) / d_player * step_s
                         nz = s.pos[2] + (self.player.pos[2] - s.pos[2]) / d_player * step_s
 
+                        # Blocked at safe zone 6m (only if lantern has fuel >= 30)
                         for lan in self.lanterns:
-                            if lan.lit:
+                            if lan.lit and lan.fuel >= 30.0:
                                 dl = math.hypot(nx - lan.pos[0], nz - lan.pos[2])
                                 if dl < safe_r:
                                     if dl > 0.001:
@@ -877,6 +1027,36 @@ class DaoDenLongSim:
                                         nz = lan.pos[2] + (nz - lan.pos[2]) / dl * safe_r
                         s.pos[0] = nx
                         s.pos[2] = nz
+
+                    elif s.state == "wander":
+                        # Target weak lantern (fuel < 30) closest
+                        weak_lanterns = [
+                            lan for lan in self.lanterns if lan.lit and lan.fuel < 30.0
+                        ]
+                        if weak_lanterns:
+                            weak_lanterns.sort(key=lambda lan: (dist_xz(s.pos, lan.pos), lan.id))
+                            target_lan = weak_lanterns[0]
+                            s.target_lantern_id = target_lan.id
+                            d_lan = dist_xz(s.pos, target_lan.pos)
+                            if d_lan <= 2.0:
+                                s.state = "drain"
+                                s.drain_timer = 0
+                            elif d_lan > 0.001:
+                                step_s = min(d_lan, shade_speed * dt)
+                                s.pos[0] += (target_lan.pos[0] - s.pos[0]) / d_lan * step_s
+                                s.pos[2] += (target_lan.pos[2] - s.pos[2]) / d_lan * step_s
+                        else:
+                            # If no weak lantern, target closest unlit lantern
+                            unlit_lanterns = [lan for lan in self.lanterns if not lan.lit]
+                            if unlit_lanterns:
+                                unlit_lanterns.sort(key=lambda lan: (dist_xz(s.pos, lan.pos), lan.id))
+                                target_lan = unlit_lanterns[0]
+                                s.target_lantern_id = None
+                                d_lan = dist_xz(s.pos, target_lan.pos)
+                                if d_lan > 0.001:
+                                    step_s = min(d_lan, shade_speed * dt)
+                                    s.pos[0] += (target_lan.pos[0] - s.pos[0]) / d_lan * step_s
+                                    s.pos[2] += (target_lan.pos[2] - s.pos[2]) / d_lan * step_s
 
             # Move Drifters
             drifters_to_remove = []
@@ -928,9 +1108,8 @@ class DaoDenLongSim:
                 hit_occurred = False
                 for s in sorted_shades:
                     if s.state not in ["stunned", "recoil"] and self.state == "playing":
-                        # If shade is inside a just-lit lantern safe zone being pushed out, it deals NO damage
                         in_pushout = any(
-                            lan.lit and lan.just_lit_ticks > 0 and dist_xz(s.pos, lan.pos) <= safe_r
+                            lan.lit and lan.fuel >= 30.0 and lan.just_lit_ticks > 0 and dist_xz(s.pos, lan.pos) <= safe_r
                             for lan in self.lanterns
                         )
                         if in_pushout:
@@ -1017,10 +1196,73 @@ class DaoDenLongSim:
                     da = self.rng.uniform(0, 2 * math.pi)
                     self.drifters.append(Drifter(d_id, [30.0 * math.cos(da), 1.0, 30.0 * math.sin(da)]))
 
-            # 11. Win / Loss evaluation
-            if self.time_left_s <= 0.0 and self.state == "playing":
+            # 11. Win / Loss evaluation (Contract v1.2: Dawn survival & no flames & darkness)
+            if self.player.flames <= 0 and self.state == "playing":
                 self.state = "lost"
-                self._record_event(next_tick, "game_over", {"result": "lost", "reason": "dawn"})
+                self._record_event(
+                    next_tick,
+                    "game_over",
+                    {
+                        "result": "lost",
+                        "reason": "no_flames",
+                        "score": self.score,
+                    },
+                )
+                self.sim_tick = next_tick
+                break
+
+            # Darkness deadlock check (Contract v1.2)
+            if self.state == "playing":
+                if len(self.lanterns) > 0 and all(not lan.lit for lan in self.lanterns) and self.player.carried == 0 and len(self.motes) == 0:
+                    self.state = "lost"
+                    self._record_event(
+                        next_tick,
+                        "game_over",
+                        {
+                            "result": "lost",
+                            "reason": "darkness",
+                            "score": self.score,
+                        },
+                    )
+                    self.sim_tick = next_tick
+                    break
+
+            if self.time_left_s <= 0.0 and self.state == "playing":
+                total_lanterns = len(self.lanterns)
+                lit_count = sum(1 for lan in self.lanterns if lan.lit)
+                needed = math.ceil(self.tuning["win_ratio"] * total_lanterns)
+
+                if lit_count >= needed:
+                    self.state = "won"
+                    # New Phase 3 Dawn scoring: +50 + floor(fuel) per lit lantern, +50 per flame
+                    dawn_score = sum(50 + int(math.floor(lan.fuel)) for lan in self.lanterns if lan.lit)
+                    flame_score = self.player.flames * self.tuning["score"]["per_flame_left"]
+                    self.score += dawn_score + flame_score
+                    self._record_event(
+                        next_tick,
+                        "game_over",
+                        {
+                            "result": "won",
+                            "reason": "dawn_survived",
+                            "lit_lanterns": lit_count,
+                            "total_lanterns": total_lanterns,
+                            "score": self.score,
+                        },
+                    )
+                else:
+                    self.state = "lost"
+                    self._record_event(
+                        next_tick,
+                        "game_over",
+                        {
+                            "result": "lost",
+                            "reason": "dawn_insufficient_light",
+                            "lit_lanterns": lit_count,
+                            "total_lanterns": total_lanterns,
+                            "score": self.score,
+                        },
+                    )
+
                 self.sim_tick = next_tick
                 break
 

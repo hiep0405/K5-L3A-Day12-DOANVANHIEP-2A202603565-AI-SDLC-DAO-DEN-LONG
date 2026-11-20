@@ -32,9 +32,9 @@ class TestDaoDenLongHeadless(unittest.TestCase):
         self.assertEqual(len(mote_events), 1)
         self.assertEqual(mote_events[0]["data"]["carried"], 1)
 
-    def test_lantern_deposit_and_win(self):
-        # Note: In Phase 2, lantern_cost changed from 5 to 10.
-        # Adjusted carried to 10 to test full deposit and victory.
+    def test_lantern_deposit_and_light(self):
+        # Note: In Contract v1.2, lighting all lanterns does not win immediately;
+        # the game continues until dawn. We verify deposit and lantern_lit event.
         scenario = {
             "player": {"pos": [0, 0, 24.0], "carried": 10, "flames": 3},
             "random_motes": False,
@@ -61,13 +61,36 @@ class TestDaoDenLongHeadless(unittest.TestCase):
 
         dep_events = [line for line in lines if line.get("name") == "deposit"]
         lit_events = [line for line in lines if line.get("name") == "lantern_lit"]
-        over_events = [line for line in lines if line.get("name") == "game_over"]
 
         self.assertEqual(len(dep_events), 1)
         self.assertEqual(dep_events[0]["data"]["amount"], 10)
         self.assertEqual(len(lit_events), 1)
+        self.assertEqual(lit_events[0]["data"]["relight"], False)
+        self.assertEqual(lit_events[0]["data"]["new_capacity"], 12)
+
+    def test_dawn_survival_victory(self):
+        # Contract v1.2: win when time expires with >= 60% lanterns lit
+        scenario = {
+            "player": {"pos": [0, 0, 0], "carried": 0, "flames": 3},
+            "random_motes": False,
+            "random_shades": False,
+            "motes": [],
+            "lanterns": [
+                {"id": "L1", "lit": True, "fuel": 80.0},
+                {"id": "L2", "lit": True, "fuel": 80.0},
+                {"id": "L3", "lit": True, "fuel": 80.0},
+                {"id": "L4", "lit": False},
+                {"id": "L5", "lit": False},
+            ],
+            "time_left_s": 0.1,  # 6 ticks
+        }
+        sim = DaoDenLongSim(seed=42, scenario_data=scenario)
+        output = sim.run(10)
+        lines = [json.loads(line) for line in output.strip().split("\n")]
+        over_events = [line for line in lines if line.get("name") == "game_over"]
         self.assertEqual(len(over_events), 1)
         self.assertEqual(over_events[0]["data"]["result"], "won")
+        self.assertEqual(over_events[0]["data"]["reason"], "dawn_survived")
 
     def test_pulse_stun_shade(self):
         # Note: In Phase 2, pulse_cost changed from 1 to 3.

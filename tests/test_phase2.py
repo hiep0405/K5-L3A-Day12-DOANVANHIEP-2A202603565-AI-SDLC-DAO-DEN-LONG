@@ -18,7 +18,7 @@ from src.core.engine import DaoDenLongSim
 class TestPhase2Features(unittest.TestCase):
     def test_dash_mechanic(self):
         scenario = {
-            "player": {"pos": [0, 0, 0], "carried": 0, "flames": 3, "dash_cd_ticks": 0},
+            "player": {"pos": [0, 0, 0], "carried": 1, "flames": 3, "dash_cd_ticks": 0},
             "random_motes": False,
             "random_shades": False,
         }
@@ -86,7 +86,7 @@ class TestPhase2Features(unittest.TestCase):
 
     def test_jump_pad_launch(self):
         scenario = {
-            "player": {"pos": [20.0, 0.0, 18.0], "carried": 0, "flames": 3},
+            "player": {"pos": [20.0, 0.0, 18.0], "carried": 1, "flames": 3},
             "random_motes": False,
             "random_shades": False,
         }
