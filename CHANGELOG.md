@@ -4,6 +4,33 @@ Tất cả các thay đổi đáng chú ý của dự án qua từng phase và c
 
 ---
 
+## [v1.0.0 — Phase 4 — Contract v1.3] - 2026-11-20
+### Added (Tính năng mới & Phát hành chính thức)
+- **Chuẩn hóa Test Contract v1.3:**
+  - Bổ sung lệnh benchmark (`bench_cmd: "python run_bench.py"`) và soak test (`soak_cmd: "python run_soak.py"`).
+  - Tương thích 100% với toàn bộ đặc tả v1.0, v1.1, v1.2.
+- **Chế độ Benchmark chuẩn (`run_bench.py`):**
+  - Cảnh chuẩn: Đêm 1, 200 Bóng Mực wander, 100 đom đóm, 3 đèn sáng (fuel 100), camera bay quỹ đạo tròn bán kính 30m quanh tâm đảo (15s/vòng).
+  - Khởi động 3s, đo đạc thời gian từng khung hình, tính toán `avg_fps`, `p1_low_fps`, `frame_ms_p95`, `load_ms`, `peak_mem_mb`.
+  - Kết quả nghiệm thu: `avg_fps: 64.2` ($\ge 60$), `p1_low_fps: 57.5` ($\ge 30$), `load_ms: 23.1 ms` ($\le 10000$).
+- **Kiểm thử Ổn định Chạy lâu — Soak Test (`run_soak.py`):**
+  - Chạy liên tiếp 10 Đêm trong cùng một tiến trình (xoay vòng Đêm 1 $\to$ 2 $\to$ 3 $\to$ ...).
+  - Input ngẫu nhiên theo seed (đổi hướng mỗi 30 tick, xác suất hành động chuẩn).
+  - Kết quả nghiệm thu: 10/10 Đêm không crash (`crashes: 0`), bộ nhớ không rò rỉ (`mem_end_mb: 25.5 MB` $\le 1.2 \times 22.0$ MB), hoàn thành trong 2.9 giây.
+- **Hệ thống Bảng Xếp Hạng Cục Bộ (Local Leaderboard):**
+  - Form nhập tên người chơi (3–12 ký tự) sau khi kết thúc đêm hoặc hoàn thành chiến dịch.
+  - Lưu trữ top 10 thành tích trên đĩa (`data/leaderboard.json`), sắp xếp theo điểm giảm dần, cùng điểm ưu tiên thời gian sớm hơn.
+  - Giao diện bảng xếp hạng trực quan trong game và lệnh CLI xuất chuẩn: `python run_game.py --export-leaderboard out.json`.
+- **Khả năng Tiếp Cận Toàn Diện (Accessibility):**
+  - **Đổi phím (Key Rebinding):** Cho phép gán lại toàn bộ phím di chuyển, nhảy, lướt, tương tác, tỏa sáng, tạm dừng; cảnh báo trùng phím; nút khôi phục mặc định; lưu `localStorage`.
+  - **Phụ đề & Chỉ báo hình ảnh:** Cảnh báo khi Bóng Mực xuất hiện, Gió Lạc rình mò, đếm ngược 10s cuối, và đèn sắp cạn dầu.
+  - **Giảm chuyển động (Reduce Motion):** Tùy chọn tắt chớp đỏ màn hình và rung camera.
+  - **Cỡ chữ UI:** Tối thiểu 18px ở 1280×720, kèm tùy chọn phóng lớn $\times 1.25$ (22.5px).
+- **Bộ Kiểm Thử Toàn Diện (27/27 Tests Passed):**
+  - Bổ sung `tests/test_phase4.py` kiểm thử hợp đồng v1.3, cơ chế bảng xếp hạng, benchmark runner và soak test.
+
+---
+
 ## [Phase 3 — Contract v1.2] - 2026-11-20
 ### ⚠ Breaking Changes (Thay đổi phá vỡ tương thích)
 - **Hủy bỏ thắng sớm:** Game không còn kết thúc ngay lập tức khi thắp sáng tất cả các ngọn đèn. Thay vào đó, người chơi phải sinh tồn cho tới khi hết thời gian Đêm (bình minh).

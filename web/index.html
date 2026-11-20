@@ -3,10 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Đảo Đèn Lồng — Đèn Cạn Dầu (Phase 3)</title>
+    <title>Đảo Đèn Lồng — Bản Phát Hành v1.0.0 (Phase 4)</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
-        body { overflow: hidden; background: #0E1430; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body {
+            overflow: hidden; background: #0E1430;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 18px; /* Accessibility: minimum 18px at 1280x720 */
+        }
+        body.large-font { font-size: 22.5px !important; } /* x1.25 scale */
+
         #canvas-container { width: 100vw; height: 100vh; display: block; }
 
         /* HUD Overlay */
@@ -17,20 +23,23 @@
         }
         .top-bar { display: flex; justify-content: space-between; align-items: flex-start; }
         .stats-card {
-            background: rgba(14, 20, 48, 0.85); backdrop-filter: blur(8px);
+            background: rgba(14, 20, 48, 0.88); backdrop-filter: blur(8px);
             border: 1px solid rgba(242, 193, 78, 0.3); border-radius: 12px;
             padding: 10px 18px; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
         }
-        .flames-container { display: flex; gap: 6px; font-size: 22px; margin-bottom: 4px; }
-        .stat-line { font-size: 15px; font-weight: 600; color: #F5F1E6; display: flex; align-items: center; gap: 8px; margin: 3px 0; }
-        .stat-highlight { color: #F2C14E; font-weight: 700; font-size: 17px; }
+        .flames-container { display: flex; gap: 6px; font-size: 24px; margin-bottom: 4px; }
+        .stat-line { font-size: 16px; font-weight: 600; color: #F5F1E6; display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+        body.large-font .stat-line { font-size: 20px; }
+        .stat-highlight { color: #F2C14E; font-weight: 700; font-size: 18px; }
+        body.large-font .stat-highlight { font-size: 23px; }
 
         .center-objective {
             text-align: center; font-size: 18px; font-weight: 700; color: #FFE9B0;
-            background: rgba(27, 35, 80, 0.85); backdrop-filter: blur(8px);
+            background: rgba(27, 35, 80, 0.88); backdrop-filter: blur(8px);
             padding: 8px 24px; border-radius: 20px; border: 1px solid rgba(242, 193, 78, 0.4);
             display: flex; flex-direction: column; gap: 4px; align-items: center;
         }
+        body.large-font .center-objective { font-size: 22px; }
         .timer-warning { color: #FF5A5F !important; animation: blink 1s infinite alternate; }
         @keyframes blink { from { opacity: 1; } to { opacity: 0.3; } }
 
@@ -38,7 +47,7 @@
         .bottom-bar { display: flex; justify-content: space-between; align-items: flex-end; width: 100%; }
         .mote-bar-container {
             display: flex; flex-direction: column; align-items: center; gap: 6px;
-            background: rgba(14, 20, 48, 0.85); backdrop-filter: blur(8px);
+            background: rgba(14, 20, 48, 0.88); backdrop-filter: blur(8px);
             padding: 8px 16px; border-radius: 14px; border: 1px solid rgba(242, 193, 78, 0.25);
         }
         .mote-slots { display: flex; gap: 5px; max-width: 320px; flex-wrap: wrap; justify-content: center; }
@@ -54,29 +63,39 @@
         /* Cooldown Icons */
         .cooldown-group { display: flex; gap: 12px; }
         .cd-box {
-            width: 68px; height: 60px; border-radius: 12px; background: rgba(14, 20, 48, 0.85);
+            width: 72px; height: 62px; border-radius: 12px; background: rgba(14, 20, 48, 0.88);
             border: 1px solid rgba(242, 193, 78, 0.3); display: flex; flex-direction: column;
-            justify-content: center; align-items: center; font-size: 11px; font-weight: bold; position: relative;
+            justify-content: center; align-items: center; font-size: 12px; font-weight: bold; position: relative;
         }
         .cd-overlay {
             position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.6);
             border-radius: 0 0 11px 11px; height: 0%; transition: height 0.1s linear;
         }
 
+        /* Subtitle & Indicator Banner */
+        #subtitle-banner {
+            position: absolute; top: 120px; left: 50%; transform: translateX(-50%);
+            background: rgba(14, 20, 48, 0.92); border: 1px solid #F2C14E; border-radius: 24px;
+            color: #FFE9B0; font-size: 16px; font-weight: bold; padding: 6px 20px;
+            display: none; pointer-events: none; z-index: 60; box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+        }
+        body.large-font #subtitle-banner { font-size: 20px; }
+
         /* Interaction prompt */
         #interact-prompt {
             position: absolute; top: 62%; left: 50%; transform: translate(-50%, -50%);
-            background: rgba(255, 179, 71, 0.95); color: #120A1A; font-weight: bold; font-size: 16px;
+            background: rgba(255, 179, 71, 0.95); color: #120A1A; font-weight: bold; font-size: 17px;
             padding: 10px 24px; border-radius: 30px; box-shadow: 0 0 25px rgba(255, 179, 71, 0.8);
             display: none; pointer-events: none;
         }
+        body.large-font #interact-prompt { font-size: 21px; }
 
         /* Directional Arrow Pointer */
         #nav-arrow-container {
             position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
             display: flex; align-items: center; gap: 8px; pointer-events: none;
             background: rgba(20, 25, 55, 0.7); padding: 4px 14px; border-radius: 20px;
-            font-size: 13px; color: #FFE9B0; border: 1px solid rgba(242, 193, 78, 0.3);
+            font-size: 14px; color: #FFE9B0; border: 1px solid rgba(242, 193, 78, 0.3);
         }
         #nav-arrow-icon {
             display: inline-block; font-size: 16px; color: #FFB347; transform-origin: center;
@@ -86,52 +105,91 @@
         #toast-notice {
             position: absolute; top: 75px; left: 50%; transform: translateX(-50%);
             background: rgba(14, 20, 48, 0.9); border: 1px solid #00B3FF; border-radius: 20px;
-            color: #00B3FF; font-weight: bold; font-size: 14px; padding: 6px 18px;
+            color: #00B3FF; font-weight: bold; font-size: 15px; padding: 6px 18px;
             opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 80;
         }
 
         /* Modals & Screens */
         .screen-modal {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(14, 20, 48, 0.92); backdrop-filter: blur(12px);
+            background: rgba(14, 20, 48, 0.94); backdrop-filter: blur(12px);
             display: none; flex-direction: column; justify-content: center; align-items: center;
             color: #F5F1E6; z-index: 100;
         }
         .btn {
             background: linear-gradient(135deg, #F2C14E, #FFB347); border: none; color: #120A1A;
-            padding: 12px 36px; font-size: 18px; font-weight: bold; border-radius: 30px; cursor: pointer;
+            padding: 12px 32px; font-size: 18px; font-weight: bold; border-radius: 30px; cursor: pointer;
             box-shadow: 0 4px 18px rgba(242, 193, 78, 0.5); transition: 0.2s; margin: 8px;
         }
-        .btn:hover { transform: scale(1.06); box-shadow: 0 6px 24px rgba(242, 193, 78, 0.8); }
+        .btn:hover { transform: scale(1.05); box-shadow: 0 6px 24px rgba(242, 193, 78, 0.8); }
         .btn-secondary {
             background: rgba(47, 93, 80, 0.8); color: #F5F1E6; border: 1px solid rgba(242, 193, 78, 0.4);
         }
+        .btn-sm {
+            padding: 6px 16px; font-size: 14px; border-radius: 16px;
+        }
 
         /* Settings modal elements */
+        .settings-container {
+            max-height: 85vh; overflow-y: auto; padding: 10px 25px;
+            display: flex; flex-direction: column; align-items: center;
+        }
         .settings-row {
-            display: flex; align-items: center; justify-content: space-between; width: 380px;
-            margin: 12px 0; font-size: 16px; font-weight: 600;
+            display: flex; align-items: center; justify-content: space-between; width: 440px;
+            margin: 8px 0; font-size: 16px; font-weight: 600;
         }
         .settings-row input[type="range"] {
-            width: 160px; cursor: pointer; accent-color: #F2C14E;
+            width: 150px; cursor: pointer; accent-color: #F2C14E;
         }
         .settings-row input[type="checkbox"] {
             width: 22px; height: 22px; cursor: pointer; accent-color: #00B3FF;
         }
 
-        /* Flash overlay on damage/fall */
+        /* Key rebind table */
+        .keybind-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; width: 440px;
+            margin: 12px 0; font-size: 14px;
+        }
+        .keybind-item {
+            display: flex; justify-content: space-between; align-items: center;
+            background: rgba(255,255,255,0.06); padding: 5px 10px; border-radius: 8px;
+        }
+        .key-btn {
+            background: #1E293B; border: 1px solid #475569; color: #F2C14E;
+            padding: 4px 10px; font-weight: bold; border-radius: 6px; cursor: pointer; min-width: 75px; text-align: center;
+        }
+        .key-btn.listening {
+            background: #F2C14E; color: #000; border-color: #FFF; animation: pulse 0.8s infinite;
+        }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        /* Leaderboard Table */
+        .leaderboard-table {
+            border-collapse: collapse; width: 560px; margin: 16px 0; font-size: 15px;
+        }
+        .leaderboard-table th, .leaderboard-table td {
+            padding: 8px 12px; text-align: center; border-bottom: 1px solid rgba(242, 193, 78, 0.2);
+        }
+        .leaderboard-table th {
+            background: rgba(242, 193, 78, 0.15); color: #F2C14E; font-weight: bold;
+        }
+        .leaderboard-table tr:hover { background: rgba(255,255,255,0.05); }
+
+        /* Flash overlay */
         #damage-flash {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(255, 90, 95, 0.4); pointer-events: none; opacity: 0;
             transition: opacity 0.3s ease-out; z-index: 50;
         }
+        body.reduce-motion #damage-flash { display: none !important; }
     </style>
     <script src="js/three.min.js"></script>
 </head>
 <body>
     <div id="canvas-container"></div>
     <div id="damage-flash"></div>
-    <div id="toast-notice">Chế độ màu hỗ trợ: Bật</div>
+    <div id="toast-notice">Thông báo</div>
+    <div id="subtitle-banner">Phụ đề cảnh báo</div>
 
     <div id="hud">
         <div class="top-bar">
@@ -159,7 +217,7 @@
         <div id="interact-prompt">E — Tương tác</div>
 
         <div class="bottom-bar">
-            <div style="font-size: 13px; color: #8FA3B8; line-height: 1.6;">
+            <div style="font-size: 14px; color: #8FA3B8; line-height: 1.6;" id="controls-hint">
                 <span style="color:#F2C14E;">WASD</span> Di chuyển &nbsp;|&nbsp;
                 <span style="color:#F2C14E;">Space</span> Nhảy &nbsp;|&nbsp;
                 <span style="color:#F2C14E;">Shift</span> Lướt (14 m/s)<br>
@@ -193,7 +251,11 @@
         <p id="intro-quote" style="font-size: 18px; max-width: 600px; text-align: center; color: #CBD5E1; line-height: 1.6; margin-bottom: 24px; font-style: italic;">
             "Sương đen lại phủ kín bờ bến rồi, Mây ơi. Đèn thắp rồi vẫn sẽ cạn dần dầu! Hãy gom đom đóm châm dầu liên tục và giữ đảo sáng tới bình minh..."
         </p>
-        <button class="btn" onclick="startNight()">Bắt đầu</button>
+        <div style="display: flex; gap: 12px;">
+            <button class="btn" onclick="startNight()">Bắt đầu</button>
+            <button class="btn btn-secondary" onclick="showLeaderboard()">Bảng Xếp Hạng</button>
+            <button class="btn btn-secondary" onclick="showSettings()">Cài Đặt</button>
+        </div>
     </div>
 
     <!-- Pause Menu -->
@@ -201,35 +263,81 @@
         <h1 style="font-size: 36px; color: #F2C14E; margin-bottom: 24px;">TẠM DỪNG</h1>
         <button class="btn" onclick="togglePause()">Tiếp tục</button>
         <button class="btn btn-secondary" onclick="restartNight()">Chơi lại Đêm này</button>
+        <button class="btn btn-secondary" onclick="showLeaderboard()">Bảng Xếp Hạng</button>
         <button class="btn btn-secondary" onclick="showSettings()">Cài đặt</button>
     </div>
 
     <!-- Settings Dialog -->
     <div id="settings-modal" class="screen-modal">
-        <h1 style="font-size: 34px; color: #F2C14E; margin-bottom: 24px;">CÀI ĐẶT</h1>
-        <div class="settings-row">
-            <span>Âm lượng tổng:</span>
-            <input type="range" id="vol-slider" min="0" max="1" step="0.05" oninput="updateSettings()">
+        <div class="settings-container">
+            <h1 style="font-size: 32px; color: #F2C14E; margin-bottom: 16px;">CÀI ĐẶT & TIẾP CẬN</h1>
+            <div class="settings-row">
+                <span>Âm lượng tổng:</span>
+                <input type="range" id="vol-slider" min="0" max="1" step="0.05" oninput="updateSettings()">
+            </div>
+            <div class="settings-row">
+                <span>Độ nhạy chuột:</span>
+                <input type="range" id="sens-slider" min="0.2" max="2.0" step="0.1" oninput="updateSettings()">
+            </div>
+            <div class="settings-row">
+                <span>Bảng màu dễ phân biệt:</span>
+                <input type="checkbox" id="cb-checkbox" onchange="toggleColorblindFromSettings()">
+            </div>
+            <div class="settings-row">
+                <span>Giảm chuyển động (No flash):</span>
+                <input type="checkbox" id="motion-checkbox" onchange="toggleReduceMotion()">
+            </div>
+            <div class="settings-row">
+                <span>Cỡ chữ lớn (×1.25):</span>
+                <input type="checkbox" id="font-checkbox" onchange="toggleLargeFont()">
+            </div>
+
+            <!-- Key Rebinding Section -->
+            <h3 style="color:#FFE9B0; margin: 16px 0 6px 0;">Đổi phím điều khiển (Key Rebinding)</h3>
+            <div id="key-conflict-msg" style="color:#FF5A5F; font-size:13px; font-weight:bold; min-height:18px;"></div>
+            <div class="keybind-grid" id="keybind-grid"></div>
+            <button class="btn-secondary btn-sm" onclick="resetKeybinds()">Khôi phục mặc định</button>
+
+            <button class="btn" style="margin-top:16px;" onclick="closeSettings()">Lưu & Đóng</button>
         </div>
-        <div class="settings-row">
-            <span>Độ nhạy chuột:</span>
-            <input type="range" id="sens-slider" min="0.2" max="2.0" step="0.1" oninput="updateSettings()">
-        </div>
-        <div class="settings-row">
-            <span>Bảng màu dễ phân biệt:</span>
-            <input type="checkbox" id="cb-checkbox" onchange="toggleColorblindFromSettings()">
-        </div>
-        <button class="btn" style="margin-top:20px;" onclick="closeSettings()">Lưu & Đóng</button>
+    </div>
+
+    <!-- Leaderboard Modal -->
+    <div id="leaderboard-modal" class="screen-modal">
+        <h1 style="font-size: 36px; color: #F2C14E; margin-bottom: 12px;">🏆 BẢNG XẾP HẠNG</h1>
+        <p style="color: #8FA3B8; font-size: 14px; margin-bottom: 12px;">Top 10 thành tích cao nhất được lưu cục bộ</p>
+        <table class="leaderboard-table">
+            <thead>
+                <tr>
+                    <th>Hạng</th>
+                    <th>Tên</th>
+                    <th>Điểm số</th>
+                    <th>Đêm thắng</th>
+                    <th>Thời gian</th>
+                </tr>
+            </thead>
+            <tbody id="leaderboard-tbody"></tbody>
+        </table>
+        <button class="btn" onclick="closeLeaderboard()">Đóng</button>
     </div>
 
     <!-- End Night Modal -->
     <div id="result-modal" class="screen-modal">
-        <h1 id="result-title" style="font-size: 44px; margin-bottom: 12px;">BÌNH MINH ĐÃ TỚI!</h1>
-        <p id="result-desc" style="font-size: 18px; color: #CBD5E1; margin-bottom: 20px; text-align: center; max-width: 520px;"></p>
-        <p style="font-size: 22px; color: #F2C14E; margin-bottom: 28px;">Tổng điểm: <span id="result-score">0</span></p>
+        <h1 id="result-title" style="font-size: 40px; margin-bottom: 12px;">BÌNH MINH ĐÃ TỚI!</h1>
+        <p id="result-desc" style="font-size: 18px; color: #CBD5E1; margin-bottom: 16px; text-align: center; max-width: 520px;"></p>
+        <p style="font-size: 22px; color: #F2C14E; margin-bottom: 16px;">Tổng điểm: <span id="result-score">0</span></p>
+
+        <!-- Save Score Form -->
+        <div id="save-score-section" style="margin-bottom: 20px; display: flex; gap: 8px; align-items: center; background: rgba(0,0,0,0.4); padding: 8px 16px; border-radius: 12px;">
+            <span style="font-size:15px;">Tên của bạn:</span>
+            <input type="text" id="player-name-input" maxlength="12" placeholder="May_Hero" style="padding: 6px 12px; border-radius: 8px; border: 1px solid #F2C14E; background: rgba(14,20,48,0.9); color: #FFF; font-size: 16px; width: 140px;">
+            <button class="btn btn-sm" onclick="submitScore()">Lưu điểm</button>
+        </div>
+
         <div id="result-buttons">
             <button class="btn" id="next-night-btn" onclick="goToNextNight()">Đêm Tiếp Theo</button>
             <button class="btn btn-secondary" id="retry-night-btn" onclick="restartNight()">Thử Lại</button>
+            <button class="btn btn-secondary" onclick="showLeaderboard()">Bảng Xếp Hạng</button>
         </div>
     </div>
 
@@ -240,6 +348,43 @@
         let masterVolume = parseFloat(localStorage.getItem('dao_vol') || '0.8');
         let mouseSensitivity = parseFloat(localStorage.getItem('dao_sens') || '1.0');
         let colorblindMode = localStorage.getItem('dao_cb') === 'true';
+        let reduceMotion = localStorage.getItem('dao_motion') === 'true';
+        let largeFont = localStorage.getItem('dao_font') === 'true';
+
+        // Apply Accessibility flags on body
+        if (reduceMotion) document.body.classList.add('reduce-motion');
+        if (largeFont) document.body.classList.add('large-font');
+
+        // Keybinding System
+        const DEFAULT_KEYS = {
+            move_up: 'KeyW',
+            move_down: 'KeyS',
+            move_left: 'KeyA',
+            move_right: 'KeyD',
+            jump: 'Space',
+            dash: 'ShiftLeft',
+            interact: 'KeyE',
+            pulse: 'KeyF',
+            pause: 'KeyP',
+        };
+        const ACTION_NAMES = {
+            move_up: 'Tiến',
+            move_down: 'Lùi',
+            move_left: 'Trái',
+            move_right: 'Phải',
+            jump: 'Nhảy',
+            dash: 'Lướt',
+            interact: 'Tương tác',
+            pulse: 'Tỏa Sáng',
+            pause: 'Tạm dừng',
+        };
+        let keybinds = Object.assign({}, DEFAULT_KEYS);
+        try {
+            const savedKeys = JSON.parse(localStorage.getItem('dao_keybinds'));
+            if (savedKeys && typeof savedKeys === 'object') Object.assign(keybinds, savedKeys);
+        } catch (e) {}
+
+        let listeningAction = null;
 
         function initAudio() {
             if (!audioCtx) audioCtx = new AudioCtx();
@@ -312,7 +457,7 @@
             }
         }
 
-        // Night Settings & Configuration (Phase 3 Contract v1.2)
+        // Night Settings & Configuration (Phase 4 Contract v1.3)
         const NIGHTS_CONFIG = {
             1: { name: "ĐÊM 1 — ĐẢO BẾN", quote: '"Sương đen lại phủ kín bờ bến rồi, Mây ơi. Đèn thắp rồi vẫn cạn dầu! Hãy gom đom đóm châm dầu và giữ đảo sáng tới bình minh..."', duration: 240, lanterns: 5 },
             2: { name: "ĐÊM 2 — ĐẢO CAU", quote: '"Đảo Cau được nối bởi cầu tre mỏng manh giữa biển mây. Cẩn thận Gió Lạc và Bóng Mực rình mò các ngọn đèn yếu!"', duration: 270, lanterns: 6 },
@@ -321,6 +466,7 @@
 
         let currentNight = 1;
         let totalCampaignScore = 0;
+        let nightsWonCount = 0;
         let isPaused = false;
         let isPlaying = false;
 
@@ -340,7 +486,14 @@
             const el = document.getElementById('toast-notice');
             el.textContent = msg;
             el.style.opacity = '1';
-            setTimeout(() => { el.style.opacity = '0'; }, 1500);
+            setTimeout(() => { el.style.opacity = '0'; }, 1800);
+        }
+
+        function showSubtitle(msg, durationMs = 2500) {
+            const el = document.getElementById('subtitle-banner');
+            el.textContent = msg;
+            el.style.display = 'block';
+            setTimeout(() => { el.style.display = 'none'; }, durationMs);
         }
 
         function toggleColorblind() {
@@ -354,6 +507,20 @@
             colorblindMode = document.getElementById('cb-checkbox').checked;
             localStorage.setItem('dao_cb', colorblindMode);
             applyColorblindStyles();
+        }
+
+        function toggleReduceMotion() {
+            reduceMotion = document.getElementById('motion-checkbox').checked;
+            localStorage.setItem('dao_motion', reduceMotion);
+            if (reduceMotion) document.body.classList.add('reduce-motion');
+            else document.body.classList.remove('reduce-motion');
+        }
+
+        function toggleLargeFont() {
+            largeFont = document.getElementById('font-checkbox').checked;
+            localStorage.setItem('dao_font', largeFont);
+            if (largeFont) document.body.classList.add('large-font');
+            else document.body.classList.remove('large-font');
         }
 
         function applyColorblindStyles() {
@@ -377,6 +544,123 @@
                     l.ring.material.color.setHex(0xFFB347);
                 }
             });
+        }
+
+        // Leaderboard API & Storage
+        async function fetchLeaderboard() {
+            try {
+                const res = await fetch('/api/leaderboard');
+                if (res.ok) {
+                    const data = await res.json();
+                    return data.entries || [];
+                }
+            } catch (e) {}
+            try {
+                return JSON.parse(localStorage.getItem('dao_leaderboard') || '[]');
+            } catch (e) { return []; }
+        }
+
+        async function saveLeaderboardEntry(entry) {
+            try {
+                const res = await fetch('/api/leaderboard', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(entry)
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    localStorage.setItem('dao_leaderboard', JSON.stringify(data.entries));
+                    return data.entries;
+                }
+            } catch (e) {}
+
+            // Fallback to localStorage
+            const entries = await fetchLeaderboard();
+            entries.push(entry);
+            entries.sort((a, b) => (b.score - a.score) || (a.achieved_at.localeCompare(b.achieved_at)));
+            const top10 = entries.slice(0, 10);
+            localStorage.setItem('dao_leaderboard', JSON.stringify(top10));
+            return top10;
+        }
+
+        async function showLeaderboard() {
+            const entries = await fetchLeaderboard();
+            const tbody = document.getElementById('leaderboard-tbody');
+            tbody.innerHTML = '';
+            if (entries.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="color:#8FA3B8; padding:16px;">Chưa có dữ liệu bảng xếp hạng</td></tr>';
+            } else {
+                entries.forEach((e, i) => {
+                    const tr = document.createElement('tr');
+                    const rankMedal = i === 0 ? '🥇 ' : (i === 1 ? '🥈 ' : (i === 2 ? '🥉 ' : `${i + 1}`));
+                    const timeStr = e.achieved_at ? e.achieved_at.replace('T', ' ').substring(0, 16) : '-';
+                    tr.innerHTML = `
+                        <td style="font-weight:bold; color:${i < 3 ? '#F2C14E' : '#FFF'}">${rankMedal}</td>
+                        <td style="font-weight:600;">${e.name}</td>
+                        <td style="color:#FFE9B0; font-weight:bold;">${e.score}</td>
+                        <td>${e.nights_won}/3</td>
+                        <td style="font-size:13px; color:#8FA3B8;">${timeStr}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+            document.getElementById('leaderboard-modal').style.display = 'flex';
+        }
+
+        function closeLeaderboard() {
+            document.getElementById('leaderboard-modal').style.display = 'none';
+        }
+
+        async function submitScore() {
+            const nameInput = document.getElementById('player-name-input');
+            const name = nameInput.value.trim();
+            if (name.length < 3 || name.length > 12) {
+                alert("Tên phải từ 3 đến 12 ký tự!");
+                return;
+            }
+            const totalScore = gameState.score + totalCampaignScore;
+            const nowIso = new Date().toISOString();
+            await saveLeaderboardEntry({
+                name: name,
+                score: totalScore,
+                nights_won: nightsWonCount,
+                achieved_at: nowIso,
+                seed: 42
+            });
+            document.getElementById('save-score-section').style.display = 'none';
+            showToast("Đã lưu điểm thành công!");
+            showLeaderboard();
+        }
+
+        // Keybinding Rebind UI Logic
+        function renderKeybindGrid() {
+            const container = document.getElementById('keybind-grid');
+            container.innerHTML = '';
+            for (const [action, label] of Object.entries(ACTION_NAMES)) {
+                const item = document.createElement('div');
+                item.className = 'keybind-item';
+                const keyName = keybinds[action] ? keybinds[action].replace('Key', '').replace('Digit', '') : 'Chưa gán';
+                item.innerHTML = `
+                    <span>${label}:</span>
+                    <button class="key-btn" id="kbtn-${action}" onclick="startListenKey('${action}')">${keyName}</button>
+                `;
+                container.appendChild(item);
+            }
+        }
+
+        function startListenKey(action) {
+            listeningAction = action;
+            document.getElementById('key-conflict-msg').textContent = `Nhấn phím mới cho "${ACTION_NAMES[action]}"...`;
+            document.querySelectorAll('.key-btn').forEach(b => b.classList.remove('listening'));
+            const btn = document.getElementById(`kbtn-${action}`);
+            if (btn) btn.classList.add('listening');
+        }
+
+        function resetKeybinds() {
+            keybinds = Object.assign({}, DEFAULT_KEYS);
+            localStorage.setItem('dao_keybinds', JSON.stringify(keybinds));
+            document.getElementById('key-conflict-msg').textContent = "Đã khôi phục phím mặc định!";
+            renderKeybindGrid();
         }
 
         // Scene Setup
@@ -433,7 +717,6 @@
         let drifters = [];
         let charms = [];
         let jumpPads = [];
-        let drainBeams = [];
 
         function clearWorld() {
             islandMeshes.forEach(m => scene.remove(m)); islandMeshes = [];
@@ -443,7 +726,6 @@
             drifters.forEach(d => scene.remove(d.mesh)); drifters = [];
             charms.forEach(c => scene.remove(c.mesh)); charms = [];
             jumpPads.forEach(j => scene.remove(j.mesh)); jumpPads = [];
-            drainBeams.forEach(b => scene.remove(b)); drainBeams = [];
         }
 
         // Height & Boundary Logic
@@ -569,7 +851,6 @@
                 addShade(`S${i+1}`, sr * Math.cos(a), sr * Math.sin(a));
             }
 
-            // Drifter on Night 2 and 3
             if (night >= 2) {
                 addDrifter("D1", 25, 25);
             }
@@ -588,18 +869,15 @@
             const light = new THREE.PointLight(0xFFB347, 0.2, 8);
             light.position.y = 3.0; g.add(light);
 
-            // Safe Zone Ring (6m radius)
             const ring = new THREE.Mesh(new THREE.RingGeometry(5.8, 6.0, 32), new THREE.MeshBasicMaterial({ color: 0xFFB347, side: THREE.DoubleSide, transparent: true, opacity: 0 }));
             ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05; g.add(ring);
 
-            // Floating Fuel Bar Group
             const barGroup = new THREE.Group(); barGroup.position.set(0, 4.1, 0);
             const barBg = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.16, 0.08), new THREE.MeshBasicMaterial({ color: 0x111827 }));
             barGroup.add(barBg);
             const barFill = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.12, 0.1), new THREE.MeshBasicMaterial({ color: 0x4ade80 }));
             barGroup.add(barFill);
 
-            // Warning Icon ⚠ sprite
             const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 64;
             const ctx = canvas.getContext('2d');
             ctx.fillStyle = '#FF5A5F'; ctx.font = 'bold 48px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -642,7 +920,6 @@
             const sMesh = new THREE.Mesh(new THREE.SphereGeometry(0.7, 16, 16), new THREE.MeshStandardMaterial({ color: 0x120A1A, emissive: 0x7A3CFF, emissiveIntensity: 0.5, roughness: 0.9 }));
             sMesh.position.y = 0.8; sGroup.add(sMesh);
 
-            // Glowing Eyes
             const eyeGeo = new THREE.SphereGeometry(0.1, 8, 8);
             const eyeMat = new THREE.MeshBasicMaterial({ color: colorblindMode ? 0xFFFFFF : 0xFF5A5F });
             const eyeL = new THREE.Mesh(eyeGeo, eyeMat); eyeL.position.set(0.22, 0.95, 0.55); sGroup.add(eyeL);
@@ -653,23 +930,42 @@
                 id, group: sGroup, mesh: sMesh, eyeLeft: eyeL, eyeRight: eyeR,
                 x, y: gy, z, state: 'wander', stunTimer: 0, recoilTimer: 0, targetLantern: null
             });
+            showSubtitle(`⚠️ Bóng Mực [${id}] xuất hiện trên đảo!`, 2000);
         }
 
         function addDrifter(id, x, z) {
             const dMesh = new THREE.Mesh(new THREE.ConeGeometry(0.4, 1.2, 8), new THREE.MeshStandardMaterial({ color: 0x8FA3B8, emissive: 0x38BDF8, emissiveIntensity: 0.8 }));
             dMesh.rotation.x = Math.PI / 2; dMesh.position.set(x, 1.5, z); scene.add(dMesh);
             drifters.push({ id, mesh: dMesh, x, y: 1.5, z, state: 'idle', stolen: 0, fleeTimer: 0 });
+            showSubtitle(`🌪️ Gió Lạc rình mò cướp ánh sáng!`, 2000);
         }
 
-        // Controls
+        // Controls with Dynamic Keybinds
         const keys = {};
         window.addEventListener('keydown', (e) => {
-            initAudio(); keys[e.code] = true;
-            if (e.code === 'KeyE') handleInteract();
-            if (e.code === 'KeyF') handlePulse();
+            initAudio();
+
+            // Rebinding capture
+            if (listeningAction) {
+                const conflict = Object.entries(keybinds).find(([act, k]) => k === e.code && act !== listeningAction);
+                if (conflict) {
+                    document.getElementById('key-conflict-msg').textContent = `Phím "${e.code}" đã được gán cho "${ACTION_NAMES[conflict[0]]}"!`;
+                    return;
+                }
+                keybinds[listeningAction] = e.code;
+                localStorage.setItem('dao_keybinds', JSON.stringify(keybinds));
+                document.getElementById('key-conflict-msg').textContent = `Đã đổi phím cho "${ACTION_NAMES[listeningAction]}" thành ${e.code}!`;
+                listeningAction = null;
+                renderKeybindGrid();
+                return;
+            }
+
+            keys[e.code] = true;
+            if (e.code === keybinds.interact) handleInteract();
+            if (e.code === keybinds.pulse) handlePulse();
             if (e.code === 'KeyC') toggleColorblind();
-            if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') handleDash();
-            if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
+            if (e.code === keybinds.dash) handleDash();
+            if (e.code === keybinds.pause || e.code === 'Escape') togglePause();
         });
         window.addEventListener('keyup', (e) => { keys[e.code] = false; });
         window.addEventListener('click', () => { handlePulse(); });
@@ -702,7 +998,6 @@
             pulseAnim.active = true; pulseAnim.r = 0.2;
             pulseRing.position.set(mayGroup.position.x, mayGroup.position.y + 0.1, mayGroup.position.z);
 
-            // Stun Shades in 5m (Bonus 15 pts if shade was draining)
             shades.forEach(s => {
                 const d = Math.hypot(mayGroup.position.x - s.x, mayGroup.position.z - s.z);
                 if (d <= 5.0) {
@@ -718,7 +1013,6 @@
                 }
             });
 
-            // Pulse Drifters
             drifters.forEach(d => {
                 const dist = Math.hypot(mayGroup.position.x - d.x, mayGroup.position.z - d.z);
                 if (dist <= 5.0) {
@@ -739,7 +1033,6 @@
         function handleInteract() {
             if (!isPlaying || isPaused || gameState.carried <= 0) return;
 
-            // Find closest candidate: unlit lantern OR lit lantern with fuel < 100
             let closest = null, minD = 2.0;
             lanterns.forEach(l => {
                 if (!l.lit || l.fuel < 100.0) {
@@ -750,7 +1043,6 @@
 
             if (closest) {
                 if (!closest.lit) {
-                    // Light or Relight (cost 5 if ever_lit, 10 if first time)
                     const cost = closest.ever_lit ? 5 : 10;
                     const needed = cost - closest.deposited;
                     const amt = Math.min(gameState.carried, needed);
@@ -778,7 +1070,6 @@
                         }
                     }
                 } else {
-                    // Refuel lit lantern (fuel < 100)
                     const neededMotes = Math.ceil((100.0 - closest.fuel) / 10.0);
                     const amt = Math.min(gameState.carried, neededMotes);
                     if (amt > 0) {
@@ -797,6 +1088,7 @@
         }
 
         function flashDamage() {
+            if (reduceMotion) return;
             const fl = document.getElementById('damage-flash');
             fl.style.opacity = '1';
             setTimeout(() => { fl.style.opacity = '0'; }, 300);
@@ -820,6 +1112,8 @@
             timeEl.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
             if (gameState.timeLeft <= 30) timeEl.classList.add('timer-warning');
             else timeEl.classList.remove('timer-warning');
+
+            if (gameState.timeLeft === 10) showSubtitle("⏳ Chỉ còn 10 giây cuối!", 1500);
 
             // Dynamic Mote Slots
             const slotsContainer = document.getElementById('mote-slots');
@@ -851,15 +1145,15 @@
                 promptEl.style.display = 'block';
                 if (!nearCandidate.lit) {
                     const cost = nearCandidate.ever_lit ? 5 : 10;
-                    promptEl.textContent = `E — ${nearCandidate.ever_lit ? 'Thắp lại đèn' : 'Thắp đèn'} (${nearCandidate.deposited}/${cost})`;
+                    promptEl.textContent = `[${keybinds.interact.replace('Key','')}] — ${nearCandidate.ever_lit ? 'Thắp lại đèn' : 'Thắp đèn'} (${nearCandidate.deposited}/${cost})`;
                 } else {
-                    promptEl.textContent = `E — Châm dầu đèn (${Math.round(nearCandidate.fuel)}/100)`;
+                    promptEl.textContent = `[${keybinds.interact.replace('Key','')}] — Châm dầu đèn (${Math.round(nearCandidate.fuel)}/100)`;
                 }
             } else {
                 promptEl.style.display = 'none';
             }
 
-            // Navigation arrow to closest unlit or low fuel lantern
+            // Navigation arrow
             let closestTarget = null, minDist = 9999;
             lanterns.forEach(l => {
                 if (!l.lit || l.fuel < 30.0) {
@@ -879,7 +1173,6 @@
                 arrowContainer.style.display = 'none';
             }
 
-            // Ambient lighting adaptation
             const litRatio = lanterns.filter(l => l.lit).length / Math.max(1, lanterns.length);
             ambientLight.intensity = 0.15 + 0.55 * litRatio;
         }
@@ -889,6 +1182,7 @@
             document.getElementById('result-modal').style.display = 'none';
             document.getElementById('pause-modal').style.display = 'none';
             document.getElementById('settings-modal').style.display = 'none';
+            document.getElementById('leaderboard-modal').style.display = 'none';
             const cfg = NIGHTS_CONFIG[currentNight];
             document.getElementById('night-display').textContent = currentNight;
             gameState = {
@@ -918,6 +1212,9 @@
             document.getElementById('vol-slider').value = masterVolume;
             document.getElementById('sens-slider').value = mouseSensitivity;
             document.getElementById('cb-checkbox').checked = colorblindMode;
+            document.getElementById('motion-checkbox').checked = reduceMotion;
+            document.getElementById('font-checkbox').checked = largeFont;
+            renderKeybindGrid();
         }
 
         function updateSettings() {
@@ -929,7 +1226,7 @@
 
         function closeSettings() {
             document.getElementById('settings-modal').style.display = 'none';
-            document.getElementById('pause-modal').style.display = 'flex';
+            if (isPaused) document.getElementById('pause-modal').style.display = 'flex';
         }
 
         function endNight(won, reason = "dawn") {
@@ -940,7 +1237,7 @@
             const nextBtn = document.getElementById('next-night-btn');
 
             if (won) {
-                // Phase 3 Dawn bonus: +50 per flame, +50 + floor(fuel) per lit lantern
+                nightsWonCount++;
                 const litLanterns = lanterns.filter(l => l.lit);
                 const flameBonus = gameState.flames * 50;
                 const fuelBonus = litLanterns.reduce((sum, l) => sum + 50 + Math.floor(l.fuel), 0);
@@ -967,6 +1264,7 @@
             }
 
             document.getElementById('result-score').textContent = gameState.score + totalCampaignScore;
+            document.getElementById('save-score-section').style.display = 'flex';
             resModal.style.display = 'flex';
         }
 
@@ -991,7 +1289,6 @@
             if (isPlaying && !isPaused) {
                 gameState.timeLeft = Math.max(0, gameState.timeLeft - dt);
 
-                // Win/Loss Evaluation at Dawn
                 if (gameState.timeLeft <= 0) {
                     const litCount = lanterns.filter(l => l.lit).length;
                     const needed = Math.ceil(0.6 * lanterns.length);
@@ -1002,7 +1299,6 @@
                     }
                 }
 
-                // Check absolute darkness deadlock
                 if (lanterns.length > 0 && lanterns.every(l => !l.lit) && gameState.carried === 0 && !motes.some(m => m.active)) {
                     endNight(false, "darkness");
                 }
@@ -1024,19 +1320,15 @@
                     mayGroup.visible = true;
                 }
 
-                // Lantern Fuel Decay & Burnout (Phase 3)
+                // Lantern Fuel Decay & Burnout
                 lanterns.forEach(l => {
                     if (l.lit) {
-                        // Natural decay: 1.0 fuel/s
                         l.fuel = Math.max(0, l.fuel - 1.0 * dt);
-
-                        // If shades are draining this lantern: additional 5.0 fuel/s per shade
                         const drainingShades = shades.filter(s => s.state === 'drain' && s.targetLantern === l.id);
                         if (drainingShades.length > 0) {
                             l.fuel = Math.max(0, l.fuel - 5.0 * drainingShades.length * dt);
                         }
 
-                        // Burnout check
                         if (l.fuel <= 0) {
                             l.fuel = 0;
                             l.lit = false;
@@ -1046,19 +1338,16 @@
                             l.ring.material.opacity = 0;
                             l.barGroup.visible = false;
                             playSound('burnout');
-                            // Draining shades return to wander
+                            showSubtitle(`⚠️ Đèn [${l.id}] đã cạn sạch dầu và tắt ngúm!`, 2000);
                             drainingShades.forEach(s => { s.state = 'wander'; s.targetLantern = null; });
                         } else {
-                            // Update floating fuel bar
                             l.barGroup.visible = true;
-                            l.barGroup.quaternion.copy(camera.quaternion); // Billboard towards camera
+                            l.barGroup.quaternion.copy(camera.quaternion);
                             const fuelRatio = Math.max(0.01, l.fuel / 100.0);
                             l.barFill.scale.x = fuelRatio;
 
                             if (l.fuel < 30.0) {
-                                // Low fuel: safe zone is disabled!
                                 l.ring.material.opacity = 0;
-                                // 1 Hz Flashing
                                 const flash = Math.sin(nowSec * 6.28) > 0;
                                 l.barFill.material.color.setHex(flash ? 0xFF5A5F : 0x7F1D1D);
                                 l.globe.material.emissive.setHex(flash ? 0xFFB347 : 0x553311);
@@ -1076,7 +1365,7 @@
                     }
                 });
 
-                // Falling Penalty Handling
+                // Falling Penalty
                 if (gameState.fallRespawnTimer > 0) {
                     gameState.fallRespawnTimer -= dt;
                     if (gameState.fallRespawnTimer <= 0) {
@@ -1086,12 +1375,12 @@
                     }
                 } else {
                     let moveX = 0, moveZ = 0;
-                    if (keys['KeyW'] || keys['ArrowUp']) moveZ -= 1;
-                    if (keys['KeyS'] || keys['ArrowDown']) moveZ += 1;
-                    if (keys['KeyA'] || keys['ArrowLeft']) moveX -= 1;
-                    if (keys['KeyD'] || keys['ArrowRight']) moveX += 1;
+                    if (keys[keybinds.move_up] || keys['ArrowUp']) moveZ -= 1;
+                    if (keys[keybinds.move_down] || keys['ArrowDown']) moveZ += 1;
+                    if (keys[keybinds.move_left] || keys['ArrowLeft']) moveX -= 1;
+                    if (keys[keybinds.move_right] || keys['ArrowRight']) moveX += 1;
 
-                    if (keys['Space'] && gameState.grounded) {
+                    if (keys[keybinds.jump] && gameState.grounded) {
                         gameState.vy = 7.0;
                         gameState.grounded = false;
                         playSound('jump');
@@ -1123,7 +1412,6 @@
                         }
                     }
 
-                    // Collision & Ground Snapping
                     const groundY = getGroundHeight(mayGroup.position.x, mayGroup.position.z);
                     if (groundY !== null) {
                         if (groundY > prevPos[1] + 0.6 && !gameState.inFlight) {
@@ -1143,7 +1431,6 @@
                         gameState.grounded = false;
                     }
 
-                    // Jump Pad Detection
                     if (gameState.grounded) {
                         jumpPads.forEach(jp => {
                             if (Math.hypot(mayGroup.position.x - jp.x, mayGroup.position.z - jp.z) <= 1.0) {
@@ -1159,13 +1446,13 @@
                         });
                     }
 
-                    // Fall off island detection
                     if (mayGroup.position.y < -10.0 && !gameState.isFalling) {
                         gameState.isFalling = true;
                         gameState.flames--;
                         gameState.carried = 0;
                         flashDamage();
                         playSound('hit');
+                        showSubtitle("⚠️ Mây bị rơi khỏi đảo! Mất 1 Ngọn Lửa và rơi hết đom đóm.", 2500);
                         if (gameState.flames <= 0) {
                             endNight(false, "no_flames");
                         } else {
@@ -1175,7 +1462,7 @@
                     }
                 }
 
-                // Pickup Motes (with dynamic carry capacity & 2s respawn)
+                // Motes
                 const currentCap = getCapacity();
                 motes.forEach(m => {
                     if (!m.active) {
@@ -1208,7 +1495,7 @@
                     }
                 });
 
-                // Pickup Charms
+                // Charms
                 charms.forEach(c => {
                     if (!c.available) {
                         c.respawnTimer -= dt;
@@ -1220,12 +1507,13 @@
                             c.respawnTimer = 45.0;
                             gameState.charmTimer = 10.0;
                             playSound('lit');
+                            showSubtitle("🌪️ Bùa Gió kích hoạt: Tốc độ +20%, Lướt không hồi chiêu!", 2000);
                             updateHUD();
                         }
                     }
                 });
 
-                // Shades AI & Fuel Drain Logic (Phase 3)
+                // Shades AI
                 shades.forEach(s => {
                     const distToPlayer = Math.hypot(mayGroup.position.x - s.x, mayGroup.position.z - s.z);
 
@@ -1239,9 +1527,7 @@
                         s.recoilTimer -= dt;
                         if (s.recoilTimer <= 0) s.state = 'wander';
                     } else if (s.state === 'drain') {
-                        // Shade is actively draining a weak lantern
                         if (distToPlayer <= 6.0) {
-                            // Player gets close -> switch to chase!
                             s.state = 'chase';
                             s.targetLantern = null;
                         } else {
@@ -1259,7 +1545,6 @@
                             let nx = s.x + (mayGroup.position.x - s.x) / distToPlayer * step;
                             let nz = s.z + (mayGroup.position.z - s.z) / distToPlayer * step;
 
-                            // Blocked at 6m safe zone ONLY if lantern has fuel >= 30
                             lanterns.forEach(l => {
                                 if (l.lit && l.fuel >= 30.0) {
                                     const dl = Math.hypot(nx - l.x, nz - l.z);
@@ -1272,7 +1557,6 @@
                             s.x = nx; s.z = nz;
                         }
 
-                        // Shade damages player
                         if (distToPlayer <= 1.0 && Math.abs(mayGroup.position.y - s.y) <= 1.5 && gameState.invulnTimer <= 0) {
                             gameState.flames--;
                             const dropped = Math.floor(gameState.carried / 2);
@@ -1292,12 +1576,10 @@
                             updateHUD();
                         }
                     } else if (s.state === 'wander') {
-                        // Check player detection
                         if (distToPlayer <= 12.0) {
                             s.state = 'chase';
                             s.targetLantern = null;
                         } else {
-                            // Find weak lit lanterns (fuel < 30)
                             const weakLanterns = lanterns.filter(l => l.lit && l.fuel < 30.0);
                             if (weakLanterns.length > 0) {
                                 weakLanterns.sort((a, b) => Math.hypot(s.x - a.x, s.z - a.z) - Math.hypot(s.x - b.x, s.z - b.z));
@@ -1312,7 +1594,6 @@
                                     s.z += (target.z - s.z) / dLan * step;
                                 }
                             } else {
-                                // Fallback: head toward unlit lanterns
                                 const unlitLanterns = lanterns.filter(l => !l.lit);
                                 if (unlitLanterns.length > 0) {
                                     unlitLanterns.sort((a, b) => Math.hypot(s.x - a.x, s.z - a.z) - Math.hypot(s.x - b.x, s.z - b.z));
@@ -1332,7 +1613,7 @@
                     s.group.position.set(s.x, s.y, s.z);
                 });
 
-                // Drifters AI (Gió Lạc)
+                // Drifters
                 drifters.forEach(d => {
                     const distToPlayer = Math.hypot(mayGroup.position.x - d.x, mayGroup.position.z - d.z);
                     if (d.state === 'idle') {
@@ -1356,6 +1637,7 @@
                             d.fleeTimer = 4.0;
                             playSound('steal');
                             flashDamage();
+                            showSubtitle("💨 Gió Lạc đã cướp đom đóm của bạn! Dùng Tỏa Sáng để đòi lại.", 2500);
                             updateHUD();
                         }
                     } else if (d.state === 'flee') {
@@ -1371,7 +1653,6 @@
                     d.mesh.position.set(d.x, d.y, d.z);
                 });
 
-                // Pulse ring animation
                 if (pulseAnim.active) {
                     pulseAnim.r += dt * 16;
                     pulseRing.scale.set(pulseAnim.r, pulseAnim.r, 1);
@@ -1382,7 +1663,6 @@
                 updateHUD();
             }
 
-            // Camera follow
             camera.position.set(
                 mayGroup.position.x + camDist * Math.sin(camYaw) * Math.cos(camPitch),
                 mayGroup.position.y + camDist * Math.sin(camPitch) + 1.5,
@@ -1398,6 +1678,7 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
+        renderKeybindGrid();
         animate();
     </script>
 </body>

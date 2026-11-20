@@ -1,9 +1,11 @@
 {
-  "contract_version": "1.2",
+  "contract_version": "1.3",
   "team": "2A202603565-DoanVanHiep",
   "build_cmd": "python -m pip install -r requirements.txt",
   "run_cmd": "python run_game.py",
   "headless_cmd": "python run_headless.py",
+  "bench_cmd": "python run_bench.py",
+  "soak_cmd": "python run_soak.py",
   "tuning": {
     "player_speed": 6.0,
     "dash_speed": 14.0,

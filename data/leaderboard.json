@@ -1,0 +1,74 @@
+{
+  "entries": [
+    {
+      "name": "PlayerD",
+      "score": 1200,
+      "nights_won": 3,
+      "achieved_at": "2026-11-20T12:00:00+07:00",
+      "seed": 4
+    },
+    {
+      "name": "PlayerC",
+      "score": 900,
+      "nights_won": 2,
+      "achieved_at": "2026-11-20T09:00:00+07:00",
+      "seed": 3
+    },
+    {
+      "name": "PlayerB",
+      "score": 900,
+      "nights_won": 2,
+      "achieved_at": "2026-11-20T11:00:00+07:00",
+      "seed": 2
+    },
+    {
+      "name": "PlayerA",
+      "score": 500,
+      "nights_won": 1,
+      "achieved_at": "2026-11-20T10:00:00+07:00",
+      "seed": 1
+    },
+    {
+      "name": "P9",
+      "score": 190,
+      "nights_won": 0,
+      "achieved_at": "2026-11-20T12:00:00+07:00",
+      "seed": 9
+    },
+    {
+      "name": "P8",
+      "score": 180,
+      "nights_won": 0,
+      "achieved_at": "2026-11-20T12:00:00+07:00",
+      "seed": 8
+    },
+    {
+      "name": "P7",
+      "score": 170,
+      "nights_won": 0,
+      "achieved_at": "2026-11-20T12:00:00+07:00",
+      "seed": 7
+    },
+    {
+      "name": "P6",
+      "score": 160,
+      "nights_won": 0,
+      "achieved_at": "2026-11-20T12:00:00+07:00",
+      "seed": 6
+    },
+    {
+      "name": "P5",
+      "score": 150,
+      "nights_won": 0,
+      "achieved_at": "2026-11-20T12:00:00+07:00",
+      "seed": 5
+    },
+    {
+      "name": "P4",
+      "score": 140,
+      "nights_won": 0,
+      "achieved_at": "2026-11-20T12:00:00+07:00",
+      "seed": 4
+    }
+  ]
+}

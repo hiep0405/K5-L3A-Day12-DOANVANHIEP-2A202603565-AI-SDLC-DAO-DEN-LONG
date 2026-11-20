@@ -1,43 +1,30 @@
-# AGENTS.md — Quy tắc làm việc cho AI Agent (Harness v1.2)
+# AGENTS.md — Quy tắc làm việc cho AI Agent (Harness v1.3)
 
-Dự án: **Đảo Đèn Lồng** (Day 12 AI SDLC) — **Phase 3 (Ticket-03 "Đèn cạn dầu")**
+Dự án: **Đảo Đèn Lồng** (Day 12 AI SDLC) — **Bản phát hành chính thức v1.0.0 (Phase 4)**  
 Sinh viên: **Đoàn Văn Hiệp** — MSSV: **2A202603565** — Lớp: **K5-L3A**
 
-## 1. Nguyên tắc cốt lõi (Contract v1.2)
-- **Test Contract v1.2 là tối thượng:** Khai báo phiên bản `"contract_version": "1.2"`.
-- **Hệ thống Nhiên liệu Đèn:**
-  - `fuel_max = 100`, hao hụt tự nhiên $1.0$ đơn vị/giây (1/60 mỗi tick).
-  - Vùng an toàn 6m chỉ có hiệu lực khi `fuel >= 30.0`.
-  - Hết dầu phát sinh sự kiện `lantern_out` (`reason: "fuel_empty"`). Đèn nhớ cờ `ever_lit = True`.
-  - Thắp lại đèn đã tắt chỉ tốn **5 đom đóm**, thưởng +40 điểm.
-  - Châm dầu cho đèn đang sáng tốn đom đóm hồi phục 10 fuel/đom, phát sự kiện `refuel`.
-- **Trạng thái Bóng Mực mở rộng (6 trạng thái):**
-  - Bắt buộc dùng đúng 6 tên: `spawning`, `wander`, `chase`, `recoil`, `stunned`, `drain`.
-  - Khi ở `wander`, Bóng Mực tìm đến đèn yếu (`fuel < 30.0`) gần nhất $\le 2$m chuyển sang `drain`, hút $5.0$ fuel/giây và phát sự kiện `fuel_drain`.
-- **Thắng / Thua theo Bình Minh (Dawn Survival):**
-  - **Không còn thắng sớm khi thắp hết đèn.**
-  - Thắng khi hết thời gian Đêm và số đèn sáng $\ge \lceil 0.6 \times \text{tổng đèn} \rceil$ (`reason: "dawn_survived"`).
-  - Thua khi mất hết ngọn lửa (`reason: "no_flames"`), hết giờ không đủ 60% đèn sáng (`reason: "dawn_insufficient_light"`), hoặc bế tắc tuyệt đối (`reason: "darkness"`).
-- **Sức chứa Đom Đóm Động (Dynamic Capacity):**
-  - Khởi đầu 10 đom đóm. Mỗi lần thắp đèn thành công tăng vĩnh viễn +2 sức chứa (tối đa 20 đom đóm).
-  - `lantern_lit` bắt buộc chứa trường `"new_capacity"`.
-- **Thứ tự 12 bước trong mỗi tick:**
-  1. Đọc input / Pause processing.
-  2. Giảm bộ đếm & Hao hụt/hút nhiên liệu đèn.
-  3. Di chuyển Mây (Nhảy, Lướt, Bục nhảy, Gió, Rơi vực).
-  4. Nhặt đom đóm & Bùa Gió.
-  5. Tương tác đèn (Nạp đom đóm / Châm dầu).
-  6. Cập nhật vùng an toàn (chỉ khi `fuel >= 30`).
-  7. Tỏa Sáng (Pulse).
-  8. Di chuyển Bóng Mực (Wander, Chase, Drain) & Gió Lạc.
-  9. Chạm / Sát thương (Gió Lạc cướp trước, Bóng Mực gây sát thương sau).
-  10. Sinh thực thể theo lịch trình.
-  11. Xét thắng / thua (No flames, Darkness deadlock, Dawn survival).
-  12. Ghi snapshot theo chu kỳ `--snapshot-every`.
+## 1. Nguyên tắc cốt lõi (Contract v1.3)
+- **Test Contract v1.3 là tối thượng:** Khai báo phiên bản `"contract_version": "1.3"` trong `game.contract.json`.
+- **Đầy đủ 4 công cụ thực thi chuẩn:**
+  - `run_cmd`: `python run_game.py` (Chạy WebGL 3D server hoặc xuất bảng xếp hạng qua `--export-leaderboard <path>`).
+  - `headless_cmd`: `python run_headless.py` (Mô phỏng 60 tick/s không giao diện, 100% tất định).
+  - `bench_cmd`: `python run_bench.py` (Đo hiệu năng cảnh chuẩn: 200 Bóng Mực, 100 đom đóm, 3 đèn sáng, camera bay vòng tròn).
+  - `soak_cmd`: `python run_soak.py` (Kiểm thử ổn định chạy lâu: 10 Đêm liên tiếp cùng tiến trình, kiểm tra rò rỉ RAM).
+- **Hệ thống Nhiên liệu Đèn:** `fuel_max = 100`, hao hụt $1.0$/s, đèn tắt khi hết dầu (`ever_lit: True`), thắp lại tốn 5 đom đóm, châm dầu (+10 fuel/đom).
+- **Bóng Mực hút dầu:** Trạng thái `drain` khi tiếp cận đèn yếu ($< 30$ fuel), hút $5.0$ fuel/s, Tỏa Sáng trúng Bóng Mực đang drain thưởng +15 điểm.
+- **Thắng theo Bình Minh (Dawn Survival):** Thắng khi hết giờ và có $\ge 60\%$ đèn sáng (`dawn_survived`).
+- **Sức chứa Đom Đóm Động:** 10 $\to$ tối đa 20 (+2 mỗi lần thắp đèn).
+- **Khả năng Tiếp Cận (Accessibility):** Đổi phím tự do, phụ đề cảnh báo, giảm chuyển động, cỡ chữ lớn $\times 1.25$.
 
 ## 2. Các lệnh quan trọng
-- **Chạy game 3D trực quan:** `python run_game.py` (truy cập `http://localhost:8000/web/`)
+- **Chạy game 3D trực quan:** `python run_game.py`
 - **Chạy chế độ Headless:**
-  `python run_headless.py --seed 42 --night 1 --ticks 600 --out test.jsonl`
-- **Chạy bộ kiểm thử tự động:**
+  `python run_headless.py --seed 42 --night 1 --ticks 1200 --out test.jsonl`
+- **Chạy Benchmark:**
+  `python run_bench.py --seed 42 --duration 30 --out bench.json`
+- **Chạy Soak Test:**
+  `python run_soak.py --seed 7 --nights 10 --out soak.json`
+- **Xuất Bảng Xếp Hạng:**
+  `python run_game.py --export-leaderboard out.json`
+- **Chạy toàn bộ kiểm thử tự động (27 bài):**
   `python -m unittest discover -s tests -p "test_*.py"`
