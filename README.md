@@ -2,7 +2,8 @@
 
 > **Học viên:** Đoàn Văn Hiệp — **MSSV:** 2A202603565 — **Lớp:** K5-L3A  
 > **Dự án:** Game 3D Đảo Đèn Lồng qua 4 Phase phát triển bằng quy trình AI SDLC.  
-> **Tag nộp:** `phase-4` · **Release:** `v1.0.0` · **Test Contract:** `v1.3`
+> **Tag nộp:** `phase-4` · **Release:** `v1.0.0` · **Test Contract:** `v1.3`  
+> **Video Demo:** [Xem Video Demo (.mp4)](docs/demo/demo.mp4) (hoặc tải tại [GitHub Releases v1.0.0](https://github.com/hiep0405/K5-L3A-DOANVANHIEP-2A202603565-Day12-AI-SDLC/releases/tag/v1.0.0))
 
 ---
 
