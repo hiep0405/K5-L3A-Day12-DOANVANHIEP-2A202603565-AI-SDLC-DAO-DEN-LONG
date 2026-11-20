@@ -1,7 +1,8 @@
 """
 Core simulation engine for Dao Den Long (Island of Lanterns).
 Implements Test Contract v1.1 specifications: 3 Nights, standardized tuning,
-strict 12-step tick execution, jump pads, Drifters, Wind Charms, and falling physics.
+strict 12-step tick execution, jump pads, Drifters, Wind Charms, cliff collisions,
+and falling physics.
 """
 
 import json
@@ -59,8 +60,6 @@ class Shade:
         self.stun_push_dir = [0.0, 0.0]
         self.recoil_dir = [0.0, 0.0]
         self.recoil_ticks = 0
-        self.safe_push_dir = [0.0, 0.0]
-        self.safe_push_ticks = 0
 
 
 class Drifter:
@@ -202,7 +201,6 @@ class DaoDenLongSim:
 
     def _init_map(self):
         if self.night == 1:
-            # 5 Lanterns
             l_coords = [
                 (0.0, 0.0, 25.0),
                 (23.8, 0.0, 7.7),
@@ -244,7 +242,6 @@ class DaoDenLongSim:
             self._spawn_initial_motes_night3()
 
     def _spawn_initial_motes_night1(self):
-        # 8 points on r=12m (every 45°), 16 points on r=33m (every 22.5°) -> total 24 points
         points = []
         for i in range(8):
             a = math.radians(i * 45)
@@ -252,14 +249,12 @@ class DaoDenLongSim:
         for i in range(16):
             a = math.radians(i * 22.5)
             points.append((round(33.0 * math.cos(a), 3), 0.0, round(33.0 * math.sin(a), 3)))
-        # Pick first 20 points
         for i in range(min(20, len(points))):
             p = points[i]
             self.motes.append(Mote(f"M{self.next_mote_id}", [p[0], p[1], p[2]], "random"))
             self.next_mote_id += 1
 
     def _spawn_initial_motes_night2(self):
-        # 4 points r=10m and 8 points r=22m for each island
         points = []
         for cx in [0.0, 70.0]:
             for i in range(4):
@@ -274,7 +269,6 @@ class DaoDenLongSim:
             self.next_mote_id += 1
 
     def _spawn_initial_motes_night3(self):
-        # 18 points r=34m on tier 0, 8 on tier 1, 4 on tier 2
         points = []
         for i in range(18):
             a = math.radians(i * 20)
@@ -392,20 +386,16 @@ class DaoDenLongSim:
             self.input_frames[t] = f
 
     def _get_ground_height(self, x: float, z: float) -> Optional[float]:
-        # Returns Y ground level at (x, z), or None if off-island
         if self.night == 1:
             if math.hypot(x, z) <= 40.0:
                 return 0.0
             return None
 
         elif self.night == 2:
-            # Island A: center (0,0), r=28
             if math.hypot(x, z) <= 28.0:
                 return 0.0
-            # Island B: center (70,0), r=28
             if math.hypot(x - 70.0, z) <= 28.0:
                 return 0.0
-            # Bridge: x in [26, 44], z in [-2, 2]
             if 26.0 <= x <= 44.0 and -2.0 <= z <= 2.0:
                 return 0.0
             return None
@@ -414,29 +404,19 @@ class DaoDenLongSim:
             dist = math.hypot(x, z)
             if dist > 45.0:
                 return None
-
-            # Bell tower: r <= 2.0
             if dist <= 2.0:
-                return 6.0  # Top or obstacle
-
-            # Tier 2: central disk r <= 8.0
+                return 6.0  # Bell tower base / top
             if dist <= 8.0:
-                return 6.0
-
-            # Tier 1: annular r in [12, 24] with z > 0
+                return 6.0  # Tier 2
             if 12.0 <= dist <= 24.0 and z > 0:
-                return 3.0
-
+                return 3.0  # Tier 1
             # Ramps at 30° and 150° from r=30 (Y=0) to r=24 (Y=3)
-            # 3m width
             angle_deg = math.degrees(math.atan2(z, x)) % 360
             for ramp_angle in [30.0, 150.0]:
                 if abs(angle_deg - ramp_angle) <= 3.5:
                     if 24.0 <= dist <= 30.0:
-                        progress = (30.0 - dist) / 6.0  # 0 at 30m, 1 at 24m
+                        progress = (30.0 - dist) / 6.0
                         return progress * 3.0
-
-            # Tier 0
             return 0.0
 
         return 0.0
@@ -520,9 +500,7 @@ class DaoDenLongSim:
         self.output_lines.append(json.dumps(evt))
 
     def run(self, total_ticks: int) -> str:
-        # Initial event: night_start
         self._record_event(0, "night_start", {"night": self.night})
-        # Snapshot tick 0
         self._record_snapshot()
 
         dt = 1.0 / 60.0
@@ -565,12 +543,10 @@ class DaoDenLongSim:
                     self._record_event(next_tick, "resumed", {})
 
             if self.is_paused:
-                # When paused, tick still advances for snapshots, but sim_tick & game state do not
                 if (step + 1) % self.snapshot_every == 0:
                     self._record_snapshot()
                 continue
 
-            # Active step execution
             interact_triggered = self.cur_interact and not prev_interact
             pulse_triggered = self.cur_pulse and not prev_pulse
             jump_triggered = self.cur_jump and not prev_jump
@@ -595,10 +571,9 @@ class DaoDenLongSim:
                     if c.respawn_ticks == 0:
                         c.available = True
 
-            # Dropped motes TTL
             expired_motes = []
             for m in self.motes:
-                m.can_pickup = True  # Can pick up starting next tick
+                m.can_pickup = True
                 if m.kind == "dropped":
                     m.ttl_ticks -= 1
                     if m.ttl_ticks <= 0:
@@ -606,14 +581,11 @@ class DaoDenLongSim:
             for m in expired_motes:
                 self.motes.remove(m)
 
-            # Wind updates for Night 3
             if self.wind_enabled:
-                cycle_tick = step % 1800  # 30s cycle = 1800 ticks
-                if cycle_tick == 1680:  # 2s before wind (warning)
-                    pass
-                elif cycle_tick == 0 and step > 0:
+                cycle_tick = step % 1800
+                if cycle_tick == 0 and step > 0:
                     self.wind_active = True
-                    self.wind_ticks_left = 300  # 5s
+                    self.wind_ticks_left = 300
                     self.wind_dir_deg = self.rng.uniform(0, 360)
                 if self.wind_active:
                     self.wind_ticks_left -= 1
@@ -621,7 +593,6 @@ class DaoDenLongSim:
                         self.wind_active = False
 
             # 3. Move Mây (Jumping, Dashing, Jump Pad, Wind, Falling)
-            # Respawn delay handling after fall
             if self.player.fall_respawn_delay > 0:
                 self.player.fall_respawn_delay -= 1
                 if self.player.fall_respawn_delay == 0:
@@ -631,14 +602,12 @@ class DaoDenLongSim:
                     self.player.invuln_ticks = 90
                     self.player.is_falling = False
             else:
-                # Handle Dash activation
                 can_dash = (self.player.dash_cd_ticks == 0 or self.player.charm_ticks > 0)
                 if dash_triggered and can_dash and self.player.dash_ticks_left == 0:
-                    self.player.dash_ticks_left = 12  # 0.2s = 12 ticks
+                    self.player.dash_ticks_left = 12
                     self.player.dash_cd_ticks = 90 if self.player.charm_ticks == 0 else 0
                     self._record_event(next_tick, "dash", {})
 
-                # Movement direction
                 theta = math.radians(self.cur_cam_yaw_deg)
                 mx, mz = self.cur_move[0], self.cur_move[1]
                 x_prime = mx * math.cos(theta) + mz * math.sin(theta)
@@ -649,49 +618,47 @@ class DaoDenLongSim:
                     z_prime /= m_len
                     self.player.facing_yaw = math.degrees(math.atan2(x_prime, z_prime))
 
-                # Apply Dash velocity
+                prev_pos = [self.player.pos[0], self.player.pos[1], self.player.pos[2]]
+
                 if self.player.dash_ticks_left > 0:
-                    # Dash direction: current move dir or facing
                     dash_dir_x = x_prime if m_len > 0.01 else math.sin(math.radians(self.player.facing_yaw))
                     dash_dir_z = z_prime if m_len > 0.01 else math.cos(math.radians(self.player.facing_yaw))
                     self.player.pos[0] += dash_dir_x * self.tuning["dash_speed"] * dt
                     self.player.pos[2] += dash_dir_z * self.tuning["dash_speed"] * dt
-                    # Dashing in mid-air maintains current height
                     self.player.vel[1] = 0.0
-
                 elif self.player.in_jump_pad_flight:
-                    # Flight trajectory: keep launch horizontal velocity
                     self.player.pos[0] += self.player.launch_vel[0] * dt
                     self.player.pos[2] += self.player.launch_vel[2] * dt
                     self.player.vel[1] += -20.0 * dt
                     self.player.pos[1] += self.player.vel[1] * dt
-
                 else:
-                    # Normal running
                     speed = 7.2 if self.player.charm_ticks > 0 else self.tuning["player_speed"]
                     self.player.pos[0] += x_prime * speed * dt
                     self.player.pos[2] += z_prime * speed * dt
 
-                    # Jump
                     if jump_triggered and self.player.grounded:
                         self.player.vel[1] = 7.0
                         self.player.grounded = False
 
-                    # Gravity
                     if not self.player.grounded:
                         self.player.vel[1] += -20.0 * dt
                         self.player.pos[1] += self.player.vel[1] * dt
 
-                    # Wind push in Night 3
                     if self.wind_active:
                         w_rad = math.radians(self.wind_dir_deg)
                         self.player.pos[0] += 2.0 * math.cos(w_rad) * dt
                         self.player.pos[2] += 2.0 * math.sin(w_rad) * dt
 
-                # Ground & collision check
+                # Cliff & ground collision check
                 ground_y = self._get_ground_height(self.player.pos[0], self.player.pos[2])
                 if ground_y is not None:
-                    if self.player.pos[1] <= ground_y:
+                    # If target ground is significantly higher than player and player is not in air above it, block horizontal movement (cliff)
+                    if ground_y > prev_pos[1] + 0.6 and not self.player.in_jump_pad_flight:
+                        self.player.pos[0] = prev_pos[0]
+                        self.player.pos[2] = prev_pos[2]
+                        ground_y = self._get_ground_height(self.player.pos[0], self.player.pos[2])
+
+                    if ground_y is not None and self.player.pos[1] <= ground_y:
                         self.player.pos[1] = ground_y
                         self.player.vel[1] = 0.0
                         self.player.grounded = True
@@ -704,7 +671,6 @@ class DaoDenLongSim:
                 # Jump Pad triggers
                 if self.player.grounded:
                     if self.night == 2:
-                        # Pad 1 at (20, 0, 18) -> launch towards Island B (70, 0, 0)
                         if math.hypot(self.player.pos[0] - 20.0, self.player.pos[2] - 18.0) <= 1.0:
                             dx, dz = 70.0 - 20.0, 0.0 - 18.0
                             dist = math.hypot(dx, dz)
@@ -712,7 +678,6 @@ class DaoDenLongSim:
                             self.player.launch_vel = [24.0 * (dx / dist), 0.0, 24.0 * (dz / dist)]
                             self.player.vel[1] = 14.0
                             self.player.grounded = False
-                        # Pad 2 at (50, 0, -18) -> launch towards Island A (0, 0, 0)
                         elif math.hypot(self.player.pos[0] - 50.0, self.player.pos[2] - (-18.0)) <= 1.0:
                             dx, dz = 0.0 - 50.0, 0.0 - (-18.0)
                             dist = math.hypot(dx, dz)
@@ -722,7 +687,6 @@ class DaoDenLongSim:
                             self.player.grounded = False
 
                     elif self.night == 3:
-                        # Pad at (0, 3, 13) -> launch to Tier 2: Y vel 12 m/s, horizontal -Z 8 m/s
                         if math.hypot(self.player.pos[0] - 0.0, self.player.pos[2] - 13.0) <= 1.0:
                             self.player.in_jump_pad_flight = True
                             self.player.launch_vel = [0.0, 0.0, -8.0]
@@ -770,13 +734,12 @@ class DaoDenLongSim:
                 for m in motes_to_remove:
                     self.motes.remove(m)
 
-                # Pick up Charms
                 for c in self.charms:
                     if c.available:
                         if dist_xz(self.player.pos, c.pos) <= pickup_r and abs(self.player.pos[1] - c.pos[1]) <= 1.5:
                             c.available = False
-                            c.respawn_ticks = 2700  # 45s = 2700 ticks
-                            self.player.charm_ticks = 600  # 10s = 600 ticks
+                            c.respawn_ticks = 2700
+                            self.player.charm_ticks = 600
                             self._record_event(next_tick, "charm_picked", {"charm_id": c.id, "charm_ticks": 600})
 
             # 5. Interact with Lanterns
@@ -787,7 +750,6 @@ class DaoDenLongSim:
                     if not lan.lit and dist_xz(self.player.pos, lan.pos) <= interact_r
                 ]
                 if candidates:
-                    # Closest first, tie-break smallest ID
                     candidates.sort(key=lambda lan: (dist_xz(self.player.pos, lan.pos), lan.id))
                     target_lan = candidates[0]
                     if self.player.carried > 0:
@@ -812,7 +774,6 @@ class DaoDenLongSim:
                                 self.score += self.tuning["score"]["per_lantern"]
                                 self._record_event(next_tick, "lantern_lit", {"lantern_id": target_lan.id})
 
-                                # Check win condition
                                 if all(lan.lit for lan in self.lanterns):
                                     self.state = "won"
                                     sec_bonus = int(math.floor(self.time_left_s)) * self.tuning["score"]["per_second_left"]
@@ -827,7 +788,6 @@ class DaoDenLongSim:
             for lan in self.lanterns:
                 if lan.lit and lan.just_lit_ticks > 0:
                     lan.just_lit_ticks -= 1
-                    # Push out shades inside safe zone
                     for s in self.shades:
                         d = dist_xz(s.pos, lan.pos)
                         if d < safe_r:
@@ -841,40 +801,37 @@ class DaoDenLongSim:
             if pulse_triggered and self.state == "playing" and not self.player.is_falling:
                 if self.player.carried >= self.tuning["pulse_cost"] and self.player.pulse_cd_ticks == 0:
                     self.player.carried -= self.tuning["pulse_cost"]
-                    self.player.pulse_cd_ticks = 180  # 3s
+                    self.player.pulse_cd_ticks = 180
                     pulse_center = [self.player.pos[0], self.player.pos[1] + 0.8, self.player.pos[2]]
                     pulse_r = self.tuning["pulse_radius"]
                     stunned_ids = []
 
-                    # Shades in 3D distance
                     for s in self.shades:
                         d3 = dist_3d(pulse_center, s.pos)
                         if d3 <= pulse_r:
                             s.state = "stunned"
-                            s.state_ticks_left = 120  # 2.0s = 120 ticks
+                            s.state_ticks_left = 120
                             d_xz = dist_xz(pulse_center, s.pos)
                             if d_xz > 0.001:
                                 s.stun_push_dir = [(s.pos[0] - pulse_center[0]) / d_xz, (s.pos[2] - pulse_center[2]) / d_xz]
                             else:
-                                s.stun_push_dir = [1.0, 0.0]  # +X fallback
+                                s.stun_push_dir = [1.0, 0.0]
                             self.score += self.tuning["score"]["per_stun"]
                             stunned_ids.append(s.id)
 
-                    # Drifters in 3D distance
                     for d in self.drifters:
                         if dist_3d(pulse_center, d.pos) <= pulse_r:
                             if d.state == "chase":
                                 d.state = "flee"
                                 d.flee_ticks = 240
                             elif d.state == "flee" and d.stolen > 0:
-                                # Drop stolen motes at current spot
                                 dropped_cnt = d.stolen
                                 for _ in range(dropped_cnt):
                                     self.motes.append(Mote(f"M{self.next_mote_id}", [d.pos[0], d.pos[1], d.pos[2]], "dropped", 480))
                                     self.next_mote_id += 1
                                 self._record_event(next_tick, "drifter_drop", {"drifter_id": d.id, "amount": dropped_cnt})
                                 d.stolen = 0
-                                d.flee_ticks = 120  # Removed after 120 ticks
+                                d.flee_ticks = 120
 
                     self._record_event(next_tick, "pulse", {"stunned_ids": stunned_ids})
 
@@ -883,7 +840,6 @@ class DaoDenLongSim:
             for s in self.shades:
                 if s.state == "stunned":
                     s.state_ticks_left -= 1
-                    # In first 15 ticks, pushed back 4m total (4.0 / 15 per tick)
                     if s.state_ticks_left >= 105:
                         s.pos[0] += s.stun_push_dir[0] * (4.0 / 15.0)
                         s.pos[2] += s.stun_push_dir[1] * (4.0 / 15.0)
@@ -912,7 +868,6 @@ class DaoDenLongSim:
                         nx = s.pos[0] + (self.player.pos[0] - s.pos[0]) / d_player * step_s
                         nz = s.pos[2] + (self.player.pos[2] - s.pos[2]) / d_player * step_s
 
-                        # Blocked at safe zone 6m
                         for lan in self.lanterns:
                             if lan.lit:
                                 dl = math.hypot(nx - lan.pos[0], nz - lan.pos[2])
@@ -939,7 +894,6 @@ class DaoDenLongSim:
                         d.pos[2] += (self.player.pos[2] - d.pos[2]) / d_player * step_d
                 elif d.state == "flee":
                     d.flee_ticks -= 1
-                    # Fly directly away from player at 7 m/s
                     if d_player > 0.001:
                         d.pos[0] += (d.pos[0] - self.player.pos[0]) / d_player * (7.0 * dt)
                         d.pos[2] += (d.pos[2] - self.player.pos[2]) / d_player * (7.0 * dt)
@@ -950,7 +904,6 @@ class DaoDenLongSim:
 
             # 9. Contact / Damage: Drifters steal first, then Shades hit (sorted by id)
             if not self.player.is_falling and self.player.fall_respawn_delay == 0:
-                # Drifter Steal
                 for d in self.drifters:
                     if d.state == "chase" and not d.has_stolen:
                         if dist_xz(d.pos, self.player.pos) <= 1.2:
@@ -971,11 +924,18 @@ class DaoDenLongSim:
                                     },
                                 )
 
-                # Shades Hit
                 sorted_shades = sorted(self.shades, key=lambda s: s.id)
                 hit_occurred = False
                 for s in sorted_shades:
                     if s.state not in ["stunned", "recoil"] and self.state == "playing":
+                        # If shade is inside a just-lit lantern safe zone being pushed out, it deals NO damage
+                        in_pushout = any(
+                            lan.lit and lan.just_lit_ticks > 0 and dist_xz(s.pos, lan.pos) <= safe_r
+                            for lan in self.lanterns
+                        )
+                        if in_pushout:
+                            continue
+
                         d_xz = dist_xz(s.pos, self.player.pos)
                         d_y = abs(s.pos[1] - self.player.pos[1])
                         if d_xz <= self.tuning["shade_hit_radius"] and d_y <= 1.5:
@@ -985,7 +945,6 @@ class DaoDenLongSim:
                                 drop_amt = self.player.carried // 2
                                 self.player.carried -= drop_amt
 
-                                # Scatter dropped motes in ring 1.5 - 2.5m
                                 for i in range(drop_amt):
                                     angle = (i * 2.0 * math.pi / max(1, drop_amt))
                                     dist_m = 1.5 + (i % 3) * 0.4
@@ -995,7 +954,6 @@ class DaoDenLongSim:
                                     self.next_mote_id += 1
 
                                 self.player.invuln_ticks = 90
-                                # Shade recoil 2m over 60 ticks
                                 s.state = "recoil"
                                 s.recoil_ticks = 60
                                 if d_xz > 0.001:
@@ -1020,7 +978,6 @@ class DaoDenLongSim:
                                     break
 
             # 10. Spawn motes, shades, drifters according to schedule
-            # Motes: at ticks 240, 480... spawn 1 mote if motes < 30
             if step > 0 and step % 240 == 0 and len(self.motes) < 30:
                 angle = self.rng.uniform(0, 2 * math.pi)
                 r_mote = self.rng.uniform(8.0, 35.0)
@@ -1030,8 +987,6 @@ class DaoDenLongSim:
                     self.motes.append(Mote(f"M{self.next_mote_id}", [mx, gy, mz], "random"))
                     self.next_mote_id += 1
 
-            # Shades schedule:
-            # 2 at tick 300, then 1 every interval
             max_shades = 6 if self.night == 1 else (8 if self.night == 2 else 10)
             spawn_interval = 480 if self.night == 1 else (420 if self.night == 2 else 360)
 
@@ -1055,7 +1010,6 @@ class DaoDenLongSim:
                         self.shades.append(Shade(s_id, [sx, 0.0, sz], "spawning"))
                         self._record_event(next_tick, "shade_spawned", {"id": s_id})
 
-            # Drifters schedule: tick 1200, 2400... max 2 (Night 2 and 3)
             if self.night >= 2 and step > 0 and step % 1200 == 0:
                 if len(self.drifters) < 2:
                     d_id = f"D{self.next_drifter_id}"

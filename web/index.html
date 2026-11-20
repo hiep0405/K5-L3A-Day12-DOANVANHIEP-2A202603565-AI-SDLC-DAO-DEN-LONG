@@ -53,9 +53,9 @@
         /* Cooldown Icons */
         .cooldown-group { display: flex; gap: 12px; }
         .cd-box {
-            width: 60px; height: 60px; border-radius: 12px; background: rgba(14, 20, 48, 0.85);
+            width: 65px; height: 60px; border-radius: 12px; background: rgba(14, 20, 48, 0.85);
             border: 1px solid rgba(242, 193, 78, 0.3); display: flex; flex-direction: column;
-            justify-content: center; align-items: center; font-size: 12px; font-weight: bold; position: relative;
+            justify-content: center; align-items: center; font-size: 11px; font-weight: bold; position: relative;
         }
         .cd-overlay {
             position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.6);
@@ -70,11 +70,15 @@
             display: none; pointer-events: none;
         }
 
-        /* Nav Pointer */
-        #nav-arrow {
-            position: absolute; width: 0; height: 0; border-left: 14px solid transparent;
-            border-right: 14px solid transparent; border-bottom: 24px solid #FFB347;
-            display: none; pointer-events: none; filter: drop-shadow(0 0 8px #FFB347);
+        /* Directional Arrow Pointer */
+        #nav-arrow-container {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            display: flex; align-items: center; gap: 8px; pointer-events: none;
+            background: rgba(20, 25, 55, 0.7); padding: 4px 14px; border-radius: 20px;
+            font-size: 13px; color: #FFE9B0; border: 1px solid rgba(242, 193, 78, 0.3);
+        }
+        #nav-arrow-icon {
+            display: inline-block; font-size: 16px; color: #FFB347; transform-origin: center;
         }
 
         /* Modals & Screens */
@@ -93,13 +97,28 @@
         .btn-secondary {
             background: rgba(47, 93, 80, 0.8); color: #F5F1E6; border: 1px solid rgba(242, 193, 78, 0.4);
         }
+
+        /* Settings modal elements */
+        .settings-row {
+            display: flex; align-items: center; justify-content: space-between; width: 340px;
+            margin: 12px 0; font-size: 16px; font-weight: 600;
+        }
+        .settings-row input[type="range"] {
+            width: 160px; cursor: pointer; accent-color: #F2C14E;
+        }
+
+        /* Flash overlay on damage/fall */
+        #damage-flash {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 90, 95, 0.4); pointer-events: none; opacity: 0;
+            transition: opacity 0.3s ease-out; z-index: 50;
+        }
     </style>
     <script src="js/three.min.js"></script>
 </head>
 <body>
     <div id="canvas-container"></div>
-
-    <div id="nav-arrow"></div>
+    <div id="damage-flash"></div>
 
     <div id="hud">
         <div class="top-bar">
@@ -120,13 +139,19 @@
             </div>
         </div>
 
+        <div id="nav-arrow-container">
+            <span>Đèn gần nhất:</span> <span id="nav-arrow-icon">⬆️</span> <span id="nav-dist-txt">25m</span>
+        </div>
+
         <div id="interact-prompt">E — Nạp ánh sáng (<span id="prompt-count">0</span>/10)</div>
 
         <div class="bottom-bar">
-            <div style="font-size: 13px; color: #8FA3B8;">
-                <span style="color:#F2C14E;">Shift</span> Lướt &nbsp;|&nbsp;
-                <span style="color:#F2C14E;">F/Click</span> Tỏa Sáng (3 đom đóm) &nbsp;|&nbsp;
-                <span style="color:#F2C14E;">E</span> Nạp đèn
+            <div style="font-size: 13px; color: #8FA3B8; line-height: 1.6;">
+                <span style="color:#F2C14E;">WASD</span> Di chuyển &nbsp;|&nbsp;
+                <span style="color:#F2C14E;">Space</span> Nhảy &nbsp;|&nbsp;
+                <span style="color:#F2C14E;">Shift</span> Lướt (14 m/s)<br>
+                <span style="color:#F2C14E;">E</span> Nạp đèn (10 đom đóm) &nbsp;|&nbsp;
+                <span style="color:#F2C14E;">F / Click</span> Tỏa Sáng (tốn 3 đom đóm)
             </div>
 
             <div class="mote-bar-container">
@@ -172,6 +197,20 @@
         <button class="btn btn-secondary" onclick="showSettings()">Cài đặt</button>
     </div>
 
+    <!-- Settings Dialog -->
+    <div id="settings-modal" class="screen-modal">
+        <h1 style="font-size: 34px; color: #F2C14E; margin-bottom: 24px;">CÀI ĐẶT</h1>
+        <div class="settings-row">
+            <span>Âm lượng tổng:</span>
+            <input type="range" id="vol-slider" min="0" max="1" step="0.05" oninput="updateSettings()">
+        </div>
+        <div class="settings-row">
+            <span>Độ nhạy chuột:</span>
+            <input type="range" id="sens-slider" min="0.2" max="2.0" step="0.1" oninput="updateSettings()">
+        </div>
+        <button class="btn" style="margin-top:20px;" onclick="closeSettings()">Lưu & Đóng</button>
+    </div>
+
     <!-- End Night Modal -->
     <div id="result-modal" class="screen-modal">
         <h1 id="result-title" style="font-size: 44px; margin-bottom: 12px;">CHIẾN THẮNG!</h1>
@@ -184,7 +223,7 @@
     </div>
 
     <script>
-        // Web Audio API Procedural Synthesizer
+        // Web Audio API Synthesizer
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         let audioCtx = null;
         let masterVolume = parseFloat(localStorage.getItem('dao_vol') || '0.8');
@@ -197,7 +236,7 @@
 
         function playSound(type) {
             initAudio();
-            if (!audioCtx) return;
+            if (!audioCtx || masterVolume <= 0) return;
             const now = audioCtx.currentTime;
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
@@ -223,9 +262,14 @@
                     g.gain.exponentialRampToValueAtTime(0.01, now + i * 0.08 + 0.3);
                     o.start(now + i * 0.08); o.stop(now + i * 0.08 + 0.3);
                 });
+            } else if (type === 'jump') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(220, now);
+                osc.frequency.exponentialRampToValueAtTime(440, now + 0.15);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+                osc.start(now); osc.stop(now + 0.15);
             } else if (type === 'dash') {
-                osc.type = 'triangle'; osc.frequency.setValueAtTime(300, now);
-                osc.frequency.exponentialRampToValueAtTime(100, now + 0.2);
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(320, now);
+                osc.frequency.exponentialRampToValueAtTime(120, now + 0.2);
                 gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
                 osc.start(now); osc.stop(now + 0.2);
             } else if (type === 'pulse') {
@@ -234,18 +278,28 @@
                 gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
                 osc.start(now); osc.stop(now + 0.3);
             } else if (type === 'hit') {
-                osc.type = 'square'; osc.frequency.setValueAtTime(120, now);
+                osc.type = 'square'; osc.frequency.setValueAtTime(140, now);
                 osc.frequency.exponentialRampToValueAtTime(40, now + 0.25);
                 gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
                 osc.start(now); osc.stop(now + 0.25);
+            } else if (type === 'pad') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(200, now);
+                osc.frequency.exponentialRampToValueAtTime(800, now + 0.3);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                osc.start(now); osc.stop(now + 0.3);
+            } else if (type === 'steal') {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(600, now);
+                osc.frequency.exponentialRampToValueAtTime(300, now + 0.2);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                osc.start(now); osc.stop(now + 0.2);
             }
         }
 
-        // Game Configuration & Night Data
+        // Night Settings & Configuration
         const NIGHTS_CONFIG = {
-            1: { name: "Đêm 1 — Đảo Bến", quote: '"Sương đen lại phủ kín bờ bến rồi, Mây ơi. Hãy gom đom đóm thắp lại 5 ngọn đèn lồng lớn..."', duration: 300, lanterns: 5 },
-            2: { name: "Đêm 2 — Đảo Cau", quote: '"Đảo Cau được nối bởi cầu tre mỏng manh giữa biển mây. Cẩn thận Gió Lạc và tận dụng bục nhảy nhé!"', duration: 330, lanterns: 6 },
-            3: { name: "Đêm 3 — Đảo Chuông", quote: '"Đảo Chuông cao 3 tầng vách đứng, gió rít từng cơn. Hãy thắp sáng tháp chuông để đón bình minh!"', duration: 360, lanterns: 7 }
+            1: { name: "ĐÊM 1 — ĐẢO BẾN", quote: '"Sương đen lại phủ kín bờ bến rồi, Mây ơi. Hãy gom đom đóm thắp lại 5 ngọn đèn lồng lớn để giữ ấm hòn đảo đêm nay..."', duration: 300, lanterns: 5 },
+            2: { name: "ĐÊM 2 — ĐẢO CAU", quote: '"Đảo Cau được nối bởi cầu tre mỏng manh giữa biển mây. Cẩn thận Gió Lạc cướp ánh sáng và tận dụng bục nhảy nhé!"', duration: 330, lanterns: 6 },
+            3: { name: "ĐÊM 3 — ĐẢO CHUÔNG", quote: '"Đảo Chuông cao 3 tầng vách đứng, gió rít từng cơn. Hãy thắp sáng tháp chuông để đón bình minh!"', duration: 360, lanterns: 7 }
         };
 
         let currentNight = 1;
@@ -256,7 +310,9 @@
         let gameState = {
             score: 0, timeLeft: 300, flames: 3, carried: 0,
             dashCooldown: 0, pulseCooldown: 0, charmTimer: 0,
-            invulnTimer: 0, isDashing: 0
+            invulnTimer: 0, isDashing: 0,
+            vy: 0, grounded: true, inFlight: false, flightVel: [0,0,0],
+            isFalling: false, fallRespawnTimer: 0
         };
 
         // Scene Setup
@@ -300,18 +356,19 @@
 
         scene.add(mayGroup);
 
-        // Pulse Ring
+        // Pulse Ring Visual
         const pulseRing = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.4, 32), new THREE.MeshBasicMaterial({ color: 0xF2C14E, side: THREE.DoubleSide, transparent: true, opacity: 0 }));
         pulseRing.rotation.x = -Math.PI / 2; pulseRing.position.y = 0.1; scene.add(pulseRing);
         let pulseAnim = { active: false, r: 0 };
 
-        // Entities Storage
+        // World Collections
         let islandMeshes = [];
         let lanterns = [];
         let motes = [];
         let shades = [];
         let drifters = [];
         let charms = [];
+        let jumpPads = [];
 
         function clearWorld() {
             islandMeshes.forEach(m => scene.remove(m)); islandMeshes = [];
@@ -320,6 +377,34 @@
             shades.forEach(s => scene.remove(s.mesh)); shades = [];
             drifters.forEach(d => scene.remove(d.mesh)); drifters = [];
             charms.forEach(c => scene.remove(c.mesh)); charms = [];
+            jumpPads.forEach(j => scene.remove(j.mesh)); jumpPads = [];
+        }
+
+        // Height & Boundary Logic
+        function getGroundHeight(x, z) {
+            if (currentNight === 1) {
+                return Math.hypot(x, z) <= 40.0 ? 0.0 : null;
+            } else if (currentNight === 2) {
+                if (Math.hypot(x, z) <= 28.0) return 0.0;
+                if (Math.hypot(x - 70.0, z) <= 28.0) return 0.0;
+                if (x >= 26.0 && x <= 44.0 && z >= -2.0 && z <= 2.0) return 0.0;
+                return null;
+            } else if (currentNight === 3) {
+                const dist = Math.hypot(x, z);
+                if (dist > 45.0) return null;
+                if (dist <= 2.0) return 6.0; // Tower base
+                if (dist <= 8.0) return 6.0; // Tier 2
+                if (dist >= 12.0 && dist <= 24.0 && z > 0) return 3.0; // Tier 1
+                // 2 Ramps at 30° and 150°
+                const deg = (Math.atan2(z, x) * 180 / Math.PI + 360) % 360;
+                for (const rampDeg of [30, 150]) {
+                    if (Math.abs(deg - rampDeg) <= 4.0 && dist >= 24.0 && dist <= 30.0) {
+                        return ((30.0 - dist) / 6.0) * 3.0;
+                    }
+                }
+                return 0.0;
+            }
+            return 0.0;
         }
 
         function buildMap(night) {
@@ -346,6 +431,8 @@
                 ].forEach((p, i) => addLantern(`L${i+1}`, p[0], p[1], p[2]));
 
                 addCharm("C1", 35, 0.5, 0);
+                addJumpPad(20, 0, 18, 70, 0, 0);  // Pad 1 -> Island B
+                addJumpPad(50, 0, -18, 0, 0, 0);  // Pad 2 -> Island A
             } else if (night === 3) {
                 const tier0 = new THREE.Mesh(new THREE.CylinderGeometry(45, 43, 4, 48), new THREE.MeshStandardMaterial({ color: 0x2F5D50 }));
                 tier0.position.y = -2; scene.add(tier0); islandMeshes.push(tier0);
@@ -359,19 +446,45 @@
                 const tower = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 8, 16), new THREE.MeshStandardMaterial({ color: 0x5B5F6E }));
                 tower.position.set(0, 10, 0); scene.add(tower); islandMeshes.push(tower);
 
+                // Ramps
+                for (const angleDeg of [30, 150]) {
+                    const r = (angleDeg * Math.PI) / 180;
+                    const ramp = new THREE.Mesh(new THREE.BoxGeometry(6, 0.4, 3), new THREE.MeshStandardMaterial({ color: 0x6B4A2F }));
+                    ramp.position.set(27 * Math.cos(r), 1.5, 27 * Math.sin(r));
+                    ramp.rotation.y = -r;
+                    ramp.rotation.z = angleDeg === 30 ? 0.46 : -0.46;
+                    scene.add(ramp); islandMeshes.push(ramp);
+                }
+
                 [
                     [0, 6, 6], [18, 3, 10], [-18, 3, 10], [35, 0, -10], [-35, 0, -10], [20, 0, -35], [-20, 0, -35]
                 ].forEach((p, i) => addLantern(`L${i+1}`, p[0], p[1], p[2]));
 
                 addCharm("C1", 30, 0.5, 25);
                 addCharm("C2", -30, 0.5, 25);
+                addJumpPad(0, 3, 13, 0, 6, 5); // Launches up to Tier 2
             }
 
             // Motes
             for (let i = 0; i < 20; i++) {
                 const a = (i * 2 * Math.PI) / 20;
                 const r = 12 + (i % 3) * 8;
-                addMote(r * Math.cos(a), 0.6, r * Math.sin(a));
+                const mx = r * Math.cos(a);
+                const mz = r * Math.sin(a);
+                const gy = getGroundHeight(mx, mz) || 0.0;
+                addMote(mx, gy + 0.6, mz);
+            }
+
+            // Initial Shades
+            for (let i = 0; i < 2; i++) {
+                const a = i * Math.PI + 0.5;
+                const sr = night === 1 ? 37 : (night === 2 ? 26 : 42);
+                addShade(`S${i+1}`, sr * Math.cos(a), sr * Math.sin(a));
+            }
+
+            // Drifter on Night 2 and 3
+            if (night >= 2) {
+                addDrifter("D1", 25, 25);
             }
         }
 
@@ -383,20 +496,46 @@
             globe.position.y = 3.0; g.add(globe);
             const light = new THREE.PointLight(0xFFB347, 0.2, 8);
             light.position.y = 3.0; g.add(light);
+
+            // Safe Zone Ring
+            const ring = new THREE.Mesh(new THREE.RingGeometry(5.8, 6.0, 32), new THREE.MeshBasicMaterial({ color: 0xFFB347, side: THREE.DoubleSide, transparent: true, opacity: 0 }));
+            ring.rotation.x = -Math.PI / 2; ring.position.y = 0.05; g.add(ring);
+
             scene.add(g);
-            lanterns.push({ id, x, y, z, group: g, globe, light, lit: false, deposited: 0 });
+            lanterns.push({ id, x, y, z, group: g, globe, light, ring, lit: false, deposited: 0 });
         }
 
-        function addMote(x, y, z) {
+        function addMote(x, y, z, kind = "random", ttl = 0) {
             const m = new THREE.Mesh(new THREE.SphereGeometry(0.25, 12, 12), new THREE.MeshStandardMaterial({ color: 0xFFF6C2, emissive: 0xFFE58A, emissiveIntensity: 1.2 }));
             m.position.set(x, y, z); scene.add(m);
-            motes.push({ mesh: m, x, y, z, active: true });
+            motes.push({ mesh: m, x, y, z, active: true, kind, ttl });
         }
 
         function addCharm(id, x, y, z) {
             const c = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.6, 0.1), new THREE.MeshStandardMaterial({ color: 0xC8102E, emissive: 0xF2C14E, emissiveIntensity: 0.5 }));
             c.position.set(x, y, z); scene.add(c);
-            charms.push({ id, mesh: c, x, y, z, available: true });
+            charms.push({ id, mesh: c, x, y, z, available: true, respawnTimer: 0 });
+        }
+
+        function addJumpPad(x, y, z, targetX, targetY, targetZ) {
+            const pad = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.1, 0.2, 24), new THREE.MeshStandardMaterial({ color: 0x38BDF8, emissive: 0x0284C7, emissiveIntensity: 0.8 }));
+            pad.position.set(x, y + 0.1, z); scene.add(pad);
+            jumpPads.push({ mesh: pad, x, y, z, targetX, targetY, targetZ });
+        }
+
+        function addShade(id, x, z) {
+            const gy = getGroundHeight(x, z) || 0.0;
+            const sGroup = new THREE.Group();
+            const sMesh = new THREE.Mesh(new THREE.SphereGeometry(0.7, 16, 16), new THREE.MeshStandardMaterial({ color: 0x120A1A, emissive: 0x7A3CFF, emissiveIntensity: 0.5, roughness: 0.9 }));
+            sMesh.position.y = 0.8; sGroup.add(sMesh);
+            sGroup.position.set(x, gy, z); scene.add(sGroup);
+            shades.push({ id, group: sGroup, mesh: sMesh, x, y: gy, z, state: 'chase', stunTimer: 0, recoilTimer: 0 });
+        }
+
+        function addDrifter(id, x, z) {
+            const dMesh = new THREE.Mesh(new THREE.ConeGeometry(0.4, 1.2, 8), new THREE.MeshStandardMaterial({ color: 0x8FA3B8, emissive: 0x38BDF8, emissiveIntensity: 0.8 }));
+            dMesh.rotation.x = Math.PI / 2; dMesh.position.set(x, 1.5, z); scene.add(dMesh);
+            drifters.push({ id, mesh: dMesh, x, y: 1.5, z, state: 'idle', stolen: 0, fleeTimer: 0 });
         }
 
         // Controls
@@ -426,6 +565,7 @@
             if (!isPlaying || isPaused || (gameState.dashCooldown > 0 && gameState.charmTimer <= 0)) return;
             gameState.isDashing = 0.2;
             gameState.dashCooldown = gameState.charmTimer > 0 ? 0 : 1.5;
+            gameState.vy = 0; // Maintain height in air
             playSound('dash');
         }
 
@@ -434,8 +574,41 @@
             gameState.carried -= 3;
             gameState.pulseCooldown = 3.0;
             playSound('pulse');
+
             pulseAnim.active = true; pulseAnim.r = 0.2;
             pulseRing.position.set(mayGroup.position.x, mayGroup.position.y + 0.1, mayGroup.position.z);
+
+            // Stun Shades in 5m
+            shades.forEach(s => {
+                const d = Math.hypot(mayGroup.position.x - s.x, mayGroup.position.z - s.z);
+                if (d <= 5.0) {
+                    s.state = 'stunned';
+                    s.stunTimer = 2.0;
+                    s.mesh.material.emissive.setHex(0x3A3450);
+                    // Push back 4m
+                    const dirX = d > 0.001 ? (s.x - mayGroup.position.x) / d : 1.0;
+                    const dirZ = d > 0.001 ? (s.z - mayGroup.position.z) / d : 0.0;
+                    s.x += dirX * 4.0; s.z += dirZ * 4.0;
+                    gameState.score += 5;
+                }
+            });
+
+            // Pulse Drifters
+            drifters.forEach(d => {
+                const dist = Math.hypot(mayGroup.position.x - d.x, mayGroup.position.z - d.z);
+                if (dist <= 5.0) {
+                    if (d.state === 'chase') {
+                        d.state = 'flee'; d.fleeTimer = 4.0;
+                    } else if (d.state === 'flee' && d.stolen > 0) {
+                        // Drop stolen motes
+                        for (let k = 0; k < d.stolen; k++) {
+                            addMote(d.x + (k % 2) * 0.5, d.y, d.z + (k > 1 ? 0.5 : 0), "dropped", 8.0);
+                        }
+                        d.stolen = 0; d.fleeTimer = 2.0;
+                    }
+                }
+            });
+
             updateHUD();
         }
 
@@ -446,6 +619,7 @@
                 const d = Math.hypot(mayGroup.position.x - l.x, mayGroup.position.z - l.z);
                 if (d <= minD && !l.lit) { minD = d; closest = l; }
             });
+
             if (closest) {
                 const needed = 10 - closest.deposited;
                 const amt = Math.min(gameState.carried, needed);
@@ -453,18 +627,26 @@
                 closest.deposited += amt;
                 gameState.score += amt * 10;
                 playSound('deposit');
+
                 if (closest.deposited >= 10) {
                     closest.lit = true;
                     closest.globe.material.emissive.setHex(0xFFB347);
                     closest.globe.material.emissiveIntensity = 2.0;
                     closest.light.intensity = 3.0;
+                    closest.ring.material.opacity = 0.5; // Show safe zone circle
                     gameState.score += 100;
                     playSound('lit');
-                    // Check win
+
                     if (lanterns.every(l => l.lit)) endNight(true);
                 }
                 updateHUD();
             }
+        }
+
+        function flashDamage() {
+            const fl = document.getElementById('damage-flash');
+            fl.style.opacity = '1';
+            setTimeout(() => { fl.style.opacity = '0'; }, 300);
         }
 
         function updateHUD() {
@@ -505,6 +687,26 @@
                 document.getElementById('prompt-count').textContent = near.deposited;
             } else promptEl.style.display = 'none';
 
+            // Navigation arrow to nearest unlit lantern
+            let closestUnlit = null, minDist = 9999;
+            lanterns.forEach(l => {
+                if (!l.lit) {
+                    const d = Math.hypot(mayGroup.position.x - l.x, mayGroup.position.z - l.z);
+                    if (d < minDist) { minDist = d; closestUnlit = l; }
+                }
+            });
+            const arrowContainer = document.getElementById('nav-arrow-container');
+            if (closestUnlit) {
+                arrowContainer.style.display = 'flex';
+                document.getElementById('nav-dist-txt').textContent = `${Math.round(minDist)}m`;
+                const dx = closestUnlit.x - mayGroup.position.x;
+                const dz = closestUnlit.z - mayGroup.position.z;
+                const angle = Math.atan2(dx, dz) - camYaw;
+                document.getElementById('nav-arrow-icon').style.transform = `rotate(${angle + Math.PI}rad)`;
+            } else {
+                arrowContainer.style.display = 'none';
+            }
+
             // Ambient lighting adaptation
             const litRatio = lanterns.filter(l => l.lit).length / Math.max(1, lanterns.length);
             ambientLight.intensity = 0.15 + 0.55 * litRatio;
@@ -514,11 +716,13 @@
             document.getElementById('intro-modal').style.display = 'none';
             document.getElementById('result-modal').style.display = 'none';
             document.getElementById('pause-modal').style.display = 'none';
+            document.getElementById('settings-modal').style.display = 'none';
             const cfg = NIGHTS_CONFIG[currentNight];
             document.getElementById('night-display').textContent = currentNight;
             gameState = {
                 score: 0, timeLeft: cfg.duration, flames: 3, carried: 0,
-                dashCooldown: 0, pulseCooldown: 0, charmTimer: 0, invulnTimer: 0, isDashing: 0
+                dashCooldown: 0, pulseCooldown: 0, charmTimer: 0, invulnTimer: 0, isDashing: 0,
+                vy: 0, grounded: true, inFlight: false, flightVel: [0,0,0], isFalling: false, fallRespawnTimer: 0
             };
             mayGroup.position.set(0, 0, 0);
             buildMap(currentNight);
@@ -534,6 +738,25 @@
 
         function restartNight() {
             startNight();
+        }
+
+        function showSettings() {
+            document.getElementById('pause-modal').style.display = 'none';
+            document.getElementById('settings-modal').style.display = 'flex';
+            document.getElementById('vol-slider').value = masterVolume;
+            document.getElementById('sens-slider').value = mouseSensitivity;
+        }
+
+        function updateSettings() {
+            masterVolume = parseFloat(document.getElementById('vol-slider').value);
+            mouseSensitivity = parseFloat(document.getElementById('sens-slider').value);
+            localStorage.setItem('dao_vol', masterVolume);
+            localStorage.setItem('dao_sens', mouseSensitivity);
+        }
+
+        function closeSettings() {
+            document.getElementById('settings-modal').style.display = 'none';
+            document.getElementById('pause-modal').style.display = 'flex';
         }
 
         function endNight(won) {
@@ -575,6 +798,7 @@
             }
         }
 
+        // Main 60 FPS Game Loop
         let clock = new THREE.Clock();
         function animate() {
             requestAnimationFrame(animate);
@@ -586,52 +810,258 @@
 
                 if (gameState.dashCooldown > 0) gameState.dashCooldown = Math.max(0, gameState.dashCooldown - dt);
                 if (gameState.pulseCooldown > 0) gameState.pulseCooldown = Math.max(0, gameState.pulseCooldown - dt);
-                if (gameState.charmTimer > 0) gameState.charmTimer = Math.max(0, gameState.charmTimer - dt);
+                if (gameState.charmTimer > 0) {
+                    gameState.charmTimer = Math.max(0, gameState.charmTimer - dt);
+                    document.getElementById('charm-indicator').style.display = 'flex';
+                    document.getElementById('charm-timer').textContent = `${Math.ceil(gameState.charmTimer)}s`;
+                } else {
+                    document.getElementById('charm-indicator').style.display = 'none';
+                }
 
-                let moveX = 0, moveZ = 0;
-                if (keys['KeyW'] || keys['ArrowUp']) moveZ -= 1;
-                if (keys['KeyS'] || keys['ArrowDown']) moveZ += 1;
-                if (keys['KeyA'] || keys['ArrowLeft']) moveX -= 1;
-                if (keys['KeyD'] || keys['ArrowRight']) moveX += 1;
+                if (gameState.invulnTimer > 0) {
+                    gameState.invulnTimer = Math.max(0, gameState.invulnTimer - dt);
+                    mayGroup.visible = (Math.floor(Date.now() / 80) % 2 === 0);
+                } else {
+                    mayGroup.visible = true;
+                }
 
-                const speed = gameState.isDashing > 0 ? 14.0 : (gameState.charmTimer > 0 ? 7.2 : 6.0);
-                if (gameState.isDashing > 0) gameState.isDashing -= dt;
+                // Falling Penalty Handling
+                if (gameState.fallRespawnTimer > 0) {
+                    gameState.fallRespawnTimer -= dt;
+                    if (gameState.fallRespawnTimer <= 0) {
+                        mayGroup.position.set(0, 0, 0);
+                        gameState.vy = 0; gameState.grounded = true;
+                        gameState.invulnTimer = 1.5; gameState.isFalling = false;
+                    }
+                } else {
+                    // Player Movement Controls
+                    let moveX = 0, moveZ = 0;
+                    if (keys['KeyW'] || keys['ArrowUp']) moveZ -= 1;
+                    if (keys['KeyS'] || keys['ArrowDown']) moveZ += 1;
+                    if (keys['KeyA'] || keys['ArrowLeft']) moveX -= 1;
+                    if (keys['KeyD'] || keys['ArrowRight']) moveX += 1;
 
-                if (moveX !== 0 || moveZ !== 0) {
-                    const len = Math.hypot(moveX, moveZ);
-                    moveX /= len; moveZ /= len;
-                    const wx = moveX * Math.cos(camYaw) + moveZ * Math.sin(camYaw);
-                    const wz = -moveX * Math.sin(camYaw) + moveZ * Math.cos(camYaw);
-                    mayGroup.position.x += wx * speed * dt;
-                    mayGroup.position.z += wz * speed * dt;
-                    mayGroup.rotation.y = Math.atan2(wx, wz);
+                    // Jumping
+                    if (keys['Space'] && gameState.grounded) {
+                        gameState.vy = 7.0;
+                        gameState.grounded = false;
+                        playSound('jump');
+                    }
+
+                    const prevPos = [mayGroup.position.x, mayGroup.position.y, mayGroup.position.z];
+                    const speed = gameState.isDashing > 0 ? 14.0 : (gameState.charmTimer > 0 ? 7.2 : 6.0);
+                    if (gameState.isDashing > 0) gameState.isDashing -= dt;
+
+                    if (gameState.inFlight) {
+                        // Jump pad ballistic flight
+                        mayGroup.position.x += gameState.flightVel[0] * dt;
+                        mayGroup.position.z += gameState.flightVel[2] * dt;
+                        gameState.vy -= 20.0 * dt;
+                        mayGroup.position.y += gameState.vy * dt;
+                    } else {
+                        if (moveX !== 0 || moveZ !== 0) {
+                            const len = Math.hypot(moveX, moveZ);
+                            moveX /= len; moveZ /= len;
+                            const wx = moveX * Math.cos(camYaw) + moveZ * Math.sin(camYaw);
+                            const wz = -moveX * Math.sin(camYaw) + moveZ * Math.cos(camYaw);
+                            mayGroup.position.x += wx * speed * dt;
+                            mayGroup.position.z += wz * speed * dt;
+                            mayGroup.rotation.y = Math.atan2(wx, wz);
+                        }
+
+                        // Gravity
+                        if (!gameState.grounded) {
+                            gameState.vy -= 20.0 * dt;
+                            mayGroup.position.y += gameState.vy * dt;
+                        }
+                    }
+
+                    // Collision & Ground Snapping
+                    const groundY = getGroundHeight(mayGroup.position.x, mayGroup.position.z);
+                    if (groundY !== null) {
+                        // Cliff collision: block horizontal movement if cliff is higher than step height
+                        if (groundY > prevPos[1] + 0.6 && !gameState.inFlight) {
+                            mayGroup.position.x = prevPos[0];
+                            mayGroup.position.z = prevPos[2];
+                        }
+                        const curG = getGroundHeight(mayGroup.position.x, mayGroup.position.z);
+                        if (curG !== null && mayGroup.position.y <= curG) {
+                            mayGroup.position.y = curG;
+                            gameState.vy = 0;
+                            gameState.grounded = true;
+                            gameState.inFlight = false;
+                        } else {
+                            gameState.grounded = false;
+                        }
+                    } else {
+                        gameState.grounded = false;
+                    }
+
+                    // Jump Pad Detection
+                    if (gameState.grounded) {
+                        jumpPads.forEach(jp => {
+                            if (Math.hypot(mayGroup.position.x - jp.x, mayGroup.position.z - jp.z) <= 1.0) {
+                                gameState.inFlight = true;
+                                gameState.grounded = false;
+                                const dx = jp.targetX - jp.x;
+                                const dz = jp.targetZ - jp.z;
+                                const dist = Math.hypot(dx, dz);
+                                gameState.flightVel = [24.0 * (dx / dist), 0, 24.0 * (dz / dist)];
+                                gameState.vy = currentNight === 3 ? 12.0 : 14.0;
+                                playSound('pad');
+                            }
+                        });
+                    }
+
+                    // Fall off island detection (Y < -10)
+                    if (mayGroup.position.y < -10.0 && !gameState.isFalling) {
+                        gameState.isFalling = true;
+                        gameState.flames--;
+                        gameState.carried = 0;
+                        flashDamage();
+                        playSound('hit');
+                        if (gameState.flames <= 0) {
+                            endNight(false);
+                        } else {
+                            gameState.fallRespawnTimer = 1.0;
+                        }
+                        updateHUD();
+                    }
                 }
 
                 // Pickup Motes
                 motes.forEach(m => {
                     if (!m.active) return;
-                    if (Math.hypot(mayGroup.position.x - m.x, mayGroup.position.z - m.z) <= 1.0 && gameState.carried < 10) {
-                        m.active = false; m.mesh.visible = false;
-                        gameState.carried++;
-                        playSound('mote');
-                        updateHUD();
+                    if (m.kind === "dropped") {
+                        m.ttl -= dt;
+                        if (m.ttl <= 0) { m.active = false; m.mesh.visible = false; }
+                    }
+                    if (m.active && Math.hypot(mayGroup.position.x - m.x, mayGroup.position.z - m.z) <= 1.0 && Math.abs(mayGroup.position.y - m.y) <= 1.5) {
+                        if (gameState.carried < 10) {
+                            m.active = false; m.mesh.visible = false;
+                            gameState.carried++;
+                            playSound('mote');
+                            updateHUD();
+                        }
                     }
                 });
 
                 // Pickup Charms
                 charms.forEach(c => {
-                    if (!c.available) return;
-                    if (Math.hypot(mayGroup.position.x - c.x, mayGroup.position.z - c.z) <= 1.0) {
-                        c.available = false; c.mesh.visible = false;
-                        gameState.charmTimer = 10.0;
-                        playSound('lit');
-                        updateHUD();
+                    if (!c.available) {
+                        c.respawnTimer -= dt;
+                        if (c.respawnTimer <= 0) { c.available = true; c.mesh.visible = true; }
+                    } else {
+                        c.mesh.rotation.y += dt * 2;
+                        if (Math.hypot(mayGroup.position.x - c.x, mayGroup.position.z - c.z) <= 1.0) {
+                            c.available = false; c.mesh.visible = false;
+                            c.respawnTimer = 45.0;
+                            gameState.charmTimer = 10.0;
+                            playSound('lit');
+                            updateHUD();
+                        }
                     }
+                });
+
+                // Shades AI & Attacks
+                shades.forEach(s => {
+                    if (s.state === 'stunned') {
+                        s.stunTimer -= dt;
+                        if (s.stunTimer <= 0) {
+                            s.state = 'chase';
+                            s.mesh.material.emissive.setHex(0x7A3CFF);
+                        }
+                    } else if (s.state === 'recoil') {
+                        s.recoilTimer -= dt;
+                        if (s.recoilTimer <= 0) s.state = 'chase';
+                    } else if (s.state === 'chase') {
+                        const d = Math.hypot(mayGroup.position.x - s.x, mayGroup.position.z - s.z);
+                        if (d > 0.1) {
+                            const step = Math.min(d, (currentNight === 3 ? 4.5 : 4.0) * dt);
+                            let nx = s.x + (mayGroup.position.x - s.x) / d * step;
+                            let nz = s.z + (mayGroup.position.z - s.z) / d * step;
+
+                            // Blocked at 6m safe zone from lit lanterns
+                            lanterns.forEach(l => {
+                                if (l.lit) {
+                                    const dl = Math.hypot(nx - l.x, nz - l.z);
+                                    if (dl < 6.0) {
+                                        nx = l.x + (nx - l.x) / dl * 6.0;
+                                        nz = l.z + (nz - l.z) / dl * 6.0;
+                                    }
+                                }
+                            });
+                            s.x = nx; s.z = nz;
+                        }
+
+                        // Shade damages player
+                        if (d <= 1.0 && Math.abs(mayGroup.position.y - s.y) <= 1.5 && gameState.invulnTimer <= 0) {
+                            gameState.flames--;
+                            const dropped = Math.floor(gameState.carried / 2);
+                            gameState.carried -= dropped;
+                            for (let k = 0; k < dropped; k++) {
+                                addMote(mayGroup.position.x + (k % 2) * 1.5 - 0.75, mayGroup.position.y, mayGroup.position.z + (k > 1 ? 1.0 : -1.0), "dropped", 8.0);
+                            }
+                            gameState.invulnTimer = 1.5;
+                            s.state = 'recoil'; s.recoilTimer = 1.0;
+                            // Push shade back 2m
+                            if (d > 0.001) {
+                                s.x -= (mayGroup.position.x - s.x) / d * 2.0;
+                                s.z -= (mayGroup.position.z - s.z) / d * 2.0;
+                            }
+                            flashDamage();
+                            playSound('hit');
+                            if (gameState.flames <= 0) endNight(false);
+                            updateHUD();
+                        }
+                    }
+                    s.y = getGroundHeight(s.x, s.z) || 0.0;
+                    s.group.position.set(s.x, s.y, s.z);
+                });
+
+                // Drifters AI (Gió Lạc)
+                drifters.forEach(d => {
+                    const distToPlayer = Math.hypot(mayGroup.position.x - d.x, mayGroup.position.z - d.z);
+                    if (d.state === 'idle') {
+                        if (gameState.carried >= 5 && distToPlayer <= 15.0 && d.stolen === 0) {
+                            d.state = 'chase';
+                        }
+                    } else if (d.state === 'chase') {
+                        if (gameState.carried < 5 || distToPlayer > 18.0) {
+                            d.state = 'idle';
+                        } else if (distToPlayer > 0.1) {
+                            d.x += (mayGroup.position.x - d.x) / distToPlayer * 7.0 * dt;
+                            d.z += (mayGroup.position.z - d.z) / distToPlayer * 7.0 * dt;
+                            d.mesh.rotation.y = Math.atan2(mayGroup.position.x - d.x, mayGroup.position.z - d.z);
+                        }
+
+                        // Steal on contact (<= 1.2m)
+                        if (distToPlayer <= 1.2) {
+                            const stealAmt = Math.min(3, gameState.carried);
+                            gameState.carried -= stealAmt;
+                            d.stolen = stealAmt;
+                            d.state = 'flee';
+                            d.fleeTimer = 4.0;
+                            playSound('steal');
+                            flashDamage();
+                            updateHUD();
+                        }
+                    } else if (d.state === 'flee') {
+                        d.fleeTimer -= dt;
+                        if (distToPlayer > 0.01) {
+                            d.x += (d.x - mayGroup.position.x) / distToPlayer * 7.0 * dt;
+                            d.z += (d.z - mayGroup.position.z) / distToPlayer * 7.0 * dt;
+                        }
+                        if (d.fleeTimer <= 0) {
+                            d.mesh.visible = false;
+                        }
+                    }
+                    d.mesh.position.set(d.x, d.y, d.z);
                 });
 
                 // Pulse ring animation
                 if (pulseAnim.active) {
-                    pulseAnim.r += dt * 14;
+                    pulseAnim.r += dt * 16;
                     pulseRing.scale.set(pulseAnim.r, pulseAnim.r, 1);
                     pulseRing.material.opacity = Math.max(0, 1 - pulseAnim.r / 5.0);
                     if (pulseAnim.r >= 5.0) { pulseAnim.active = false; pulseRing.material.opacity = 0; }
