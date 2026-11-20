@@ -1,25 +1,20 @@
-# AGENTS.md — Quy tắc làm việc cho AI Agent (Harness)
+# AGENTS.md — Quy tắc làm việc cho AI Agent (Harness v1.1)
 
-Dự án: **Đảo Đèn Lồng** (Day 12 AI SDLC)
+Dự án: **Đảo Đèn Lồng** (Day 12 AI SDLC) — **Phase 2 (Ticket-02)**
 Sinh viên: **Đoàn Văn Hiệp** — MSSV: **2A202603565**
 
 ## 1. Nguyên tắc cốt lõi
-- **Test Contract là tối thượng:** Không bao giờ thay đổi các trường dữ liệu, định dạng JSONL, quy ước tọa độ, hay làm sai khác exit code của `run_headless.py`.
-- **Tách biệt Core và Renderer:**
-  - `src/core/`: Logic game mô phỏng toán học tất định (60 tick/s), không phụ thuộc GPU/Window.
-  - `web/`: Giao diện 3D Three.js và âm thanh Web Audio API phục vụ chơi trực quan (`run_game.py`).
-- **Không tự ý giả định mà không ghi chép:** Mọi điểm mơ hồ được ghi chép vào `docs/notes/assumptions.md`.
-- **Tiết kiệm token:** Giữ ngữ cảnh ngắn gọn, giải quyết theo bước nhỏ, chạy test xác minh ngay sau mỗi lần sửa.
+- **Test Contract v1.1 là tối thượng:** Khai báo phiên bản `"contract_version": "1.1"`.
+- **Đầy đủ 3 Đêm:** `--night` nhận giá trị `1`, `2`, `3`.
+- **Snapshot mở rộng bắt buộc:**
+  - `night`, `wind: {active, dir_deg}`
+  - `player`: `vel`, `grounded`, `invuln`, `dash_cd_s`, `pulse_cd_s`, `charm_s`
+  - Các mảng bắt buộc: `motes`, `shades`, `drifters`, `charms`, `lanterns`, `motes_active`.
+- **Trạng thái Bóng Mực chuẩn hóa:** Bắt buộc dùng đúng 5 tên trạng thái: `spawning`, `wander`, `chase`, `recoil`, `stunned`.
+- **Thứ tự 12 bước trong mỗi tick:** Đọc input/pause $\rightarrow$ Giảm bộ đếm $\rightarrow$ Di chuyển Mây/rơi đảo $\rightarrow$ Nhặt đom đóm/bùa $\rightarrow$ Nạp đèn $\rightarrow$ Cập nhật vùng an toàn $\rightarrow$ Tỏa Sáng $\rightarrow$ Di chuyển quái/Gió Lạc $\rightarrow$ Chạm/sát thương $\rightarrow$ Sinh thực thể theo lịch $\rightarrow$ Xét thắng/thua $\rightarrow$ Ghi snapshot.
 
 ## 2. Các lệnh quan trọng
-- **Cài đặt:** `python -m pip install -r requirements.txt` (Zero external dependencies).
-- **Chạy game 3D trực quan:** `python run_game.py` (Khởi chạy máy chủ cục bộ và mở trình duyệt).
+- **Chạy game 3D trực quan:** `python run_game.py`
 - **Chạy chế độ Headless:**
   `python run_headless.py --seed 42 --night 1 --ticks 600 --out test.jsonl`
-- **Chạy kiểm thử tự động:** `python -m unittest discover -s tests -p "test_*.py"`
-
-## 3. Quy ước tọa độ & Đo lường
-- Độ dài tính bằng mét ($m$). Trục $Y$ hướng lên trên; mặt đất đảo ở $Y = 0$.
-- Tọa độ người chơi xuất phát mặc định: $(0, 0, 0)$.
-- Mọi khoảng cách đo trên mặt phẳng ngang $XZ$: $d = \sqrt{\Delta x^2 + \Delta z^2}$.
-- Toạ độ trong snapshot xuất ra làm tròn 3 chữ số thập phân (`round(val, 3)`).
+- **Chạy bộ kiểm thử tự động:** `python -m unittest discover -s tests -p "test_*.py"`

@@ -3,113 +3,193 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Đảo Đèn Lồng — 3D Game</title>
+    <title>Đảo Đèn Lồng — 3 Đêm (Phase 2)</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
-        body { overflow: hidden; background: #05060f; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { overflow: hidden; background: #0E1430; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         #canvas-container { width: 100vw; height: 100vh; display: block; }
 
         /* HUD Overlay */
         #hud {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             pointer-events: none; display: flex; flex-direction: column; justify-content: space-between;
-            padding: 24px; color: #fff; text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+            padding: 20px; color: #F5F1E6; text-shadow: 0 2px 6px rgba(0,0,0,0.8);
         }
-        .top-bar {
-            display: flex; justify-content: space-between; align-items: flex-start;
-        }
+        .top-bar { display: flex; justify-content: space-between; align-items: flex-start; }
         .stats-card {
-            background: rgba(10, 15, 30, 0.75); backdrop-filter: blur(8px);
-            border: 1px solid rgba(255, 200, 100, 0.25); border-radius: 12px;
-            padding: 12px 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            background: rgba(14, 20, 48, 0.85); backdrop-filter: blur(8px);
+            border: 1px solid rgba(242, 193, 78, 0.3); border-radius: 12px;
+            padding: 10px 18px; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
         }
-        .flames-container { display: flex; gap: 8px; font-size: 24px; margin-bottom: 6px; }
-        .stat-line { font-size: 16px; font-weight: 600; color: #f0e6d2; display: flex; align-items: center; gap: 8px; margin: 4px 0; }
-        .stat-highlight { color: #ffbe3b; font-weight: 700; font-size: 18px; }
+        .flames-container { display: flex; gap: 6px; font-size: 22px; margin-bottom: 4px; }
+        .stat-line { font-size: 15px; font-weight: 600; color: #F5F1E6; display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+        .stat-highlight { color: #F2C14E; font-weight: 700; font-size: 17px; }
 
         .center-objective {
-            text-align: center; font-size: 20px; font-weight: 700; color: #ffdd80;
-            background: rgba(20, 20, 40, 0.75); backdrop-filter: blur(8px);
-            padding: 10px 24px; border-radius: 20px; border: 1px solid rgba(255, 220, 120, 0.3);
+            text-align: center; font-size: 19px; font-weight: 700; color: #FFE9B0;
+            background: rgba(27, 35, 80, 0.85); backdrop-filter: blur(8px);
+            padding: 8px 22px; border-radius: 20px; border: 1px solid rgba(242, 193, 78, 0.4);
+        }
+        .timer-warning { color: #FF5A5F !important; animation: blink 1s infinite alternate; }
+        @keyframes blink { from { opacity: 1; } to { opacity: 0.3; } }
+
+        /* 10-slot Mote Bar */
+        .bottom-bar { display: flex; justify-content: space-between; align-items: flex-end; width: 100%; }
+        .mote-bar-container {
+            display: flex; flex-direction: column; align-items: center; gap: 6px;
+            background: rgba(14, 20, 48, 0.85); backdrop-filter: blur(8px);
+            padding: 8px 16px; border-radius: 14px; border: 1px solid rgba(242, 193, 78, 0.25);
+        }
+        .mote-slots { display: flex; gap: 6px; }
+        .mote-slot {
+            width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid #8FA3B8;
+            background: rgba(0,0,0,0.4); transition: all 0.2s;
+        }
+        .mote-slot.filled {
+            background: #FFF6C2; border-color: #FFE58A;
+            box-shadow: 0 0 10px #FFE58A;
         }
 
-        .controls-hint {
-            text-align: center; background: rgba(10, 15, 25, 0.7); backdrop-filter: blur(6px);
-            padding: 8px 18px; border-radius: 10px; font-size: 14px; color: #cbd5e1; align-self: center;
-            border: 1px solid rgba(255,255,255,0.1);
+        /* Cooldown Icons */
+        .cooldown-group { display: flex; gap: 12px; }
+        .cd-box {
+            width: 60px; height: 60px; border-radius: 12px; background: rgba(14, 20, 48, 0.85);
+            border: 1px solid rgba(242, 193, 78, 0.3); display: flex; flex-direction: column;
+            justify-content: center; align-items: center; font-size: 12px; font-weight: bold; position: relative;
         }
-        .key { background: #334155; padding: 2px 8px; border-radius: 4px; font-weight: bold; color: #ffbe3b; }
+        .cd-overlay {
+            position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.6);
+            border-radius: 0 0 11px 11px; height: 0%; transition: height 0.1s linear;
+        }
 
         /* Interaction prompt */
         #interact-prompt {
-            position: absolute; top: 60%; left: 50%; transform: translate(-50%, -50%);
-            background: rgba(255, 170, 40, 0.9); color: #1e1b18; font-weight: bold; font-size: 18px;
-            padding: 12px 28px; border-radius: 30px; box-shadow: 0 0 25px rgba(255, 170, 40, 0.8);
-            display: none; pointer-events: none; animation: pulse-prompt 1s infinite alternate;
+            position: absolute; top: 62%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(255, 179, 71, 0.95); color: #120A1A; font-weight: bold; font-size: 17px;
+            padding: 10px 24px; border-radius: 30px; box-shadow: 0 0 25px rgba(255, 179, 71, 0.8);
+            display: none; pointer-events: none;
         }
-        @keyframes pulse-prompt { from { transform: translate(-50%, -50%) scale(0.95); } to { transform: translate(-50%, -50%) scale(1.05); } }
 
-        /* Modal Dialog */
-        #game-modal {
+        /* Nav Pointer */
+        #nav-arrow {
+            position: absolute; width: 0; height: 0; border-left: 14px solid transparent;
+            border-right: 14px solid transparent; border-bottom: 24px solid #FFB347;
+            display: none; pointer-events: none; filter: drop-shadow(0 0 8px #FFB347);
+        }
+
+        /* Modals & Screens */
+        .screen-modal {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(4, 6, 15, 0.88); backdrop-filter: blur(12px);
+            background: rgba(14, 20, 48, 0.92); backdrop-filter: blur(12px);
             display: none; flex-direction: column; justify-content: center; align-items: center;
-            color: #fff; z-index: 100;
+            color: #F5F1E6; z-index: 100;
         }
-        #game-modal h1 { font-size: 48px; margin-bottom: 16px; text-shadow: 0 0 20px rgba(255,200,80,0.6); }
-        #game-modal p { font-size: 20px; color: #cbd5e1; margin-bottom: 24px; text-align: center; max-width: 500px; line-height: 1.5; }
-        .restart-btn {
-            background: linear-gradient(135deg, #ff9900, #ff5500); border: none; color: #fff;
-            padding: 14px 40px; font-size: 20px; font-weight: bold; border-radius: 30px; cursor: pointer;
-            box-shadow: 0 4px 20px rgba(255, 120, 0, 0.6); transition: 0.2s;
+        .btn {
+            background: linear-gradient(135deg, #F2C14E, #FFB347); border: none; color: #120A1A;
+            padding: 12px 36px; font-size: 18px; font-weight: bold; border-radius: 30px; cursor: pointer;
+            box-shadow: 0 4px 18px rgba(242, 193, 78, 0.5); transition: 0.2s; margin: 8px;
         }
-        .restart-btn:hover { transform: scale(1.08); box-shadow: 0 6px 30px rgba(255, 150, 0, 0.8); }
+        .btn:hover { transform: scale(1.06); box-shadow: 0 6px 24px rgba(242, 193, 78, 0.8); }
+        .btn-secondary {
+            background: rgba(47, 93, 80, 0.8); color: #F5F1E6; border: 1px solid rgba(242, 193, 78, 0.4);
+        }
     </style>
     <script src="js/three.min.js"></script>
 </head>
 <body>
     <div id="canvas-container"></div>
 
+    <div id="nav-arrow"></div>
+
     <div id="hud">
         <div class="top-bar">
             <div class="stats-card">
                 <div class="flames-container" id="flames-display">🔥🔥🔥</div>
-                <div class="stat-line">Đom đóm: <span id="motes-count" class="stat-highlight">0</span> / 10</div>
-                <div class="stat-line">Hồi chiêu Tỏa Sáng: <span id="pulse-status" style="color: #4ade80;">Sẵn sàng</span></div>
+                <div class="stat-line">Đêm: <span id="night-display" class="stat-highlight">1</span> / 3</div>
+                <div class="stat-line" id="charm-indicator" style="display:none; color:#C8102E;">🌪️ Bùa Gió: <span id="charm-timer">10s</span></div>
             </div>
 
             <div class="center-objective">
-                🏮 Đèn Lớn: <span id="lanterns-lit" class="stat-highlight">0</span> / 5
+                🏮 Đèn: <span id="lanterns-lit" class="stat-highlight">0</span> / <span id="lanterns-total">5</span>
+                &nbsp;|&nbsp; ⏱️ <span id="time-display" class="stat-highlight">05:00</span>
             </div>
 
             <div class="stats-card" style="text-align: right;">
-                <div class="stat-line" style="justify-content: flex-end;">⏱️ Thời gian: <span id="time-display" class="stat-highlight">05:00</span></div>
                 <div class="stat-line" style="justify-content: flex-end;">🏆 Điểm: <span id="score-display" class="stat-highlight">0</span></div>
+                <div class="stat-line" style="justify-content: flex-end; font-size: 13px; color:#8FA3B8;">[P] / [Esc]: Tạm dừng</div>
             </div>
         </div>
 
-        <div id="interact-prompt">Nhấn [E] để thắp Đèn Lồng Lớn</div>
+        <div id="interact-prompt">E — Nạp ánh sáng (<span id="prompt-count">0</span>/10)</div>
 
-        <div class="controls-hint">
-            <span class="key">W A S D</span> Di chuyển &nbsp;|&nbsp;
-            <span class="key">Space</span> Nhảy &nbsp;|&nbsp;
-            <span class="key">E</span> Thắp đèn &nbsp;|&nbsp;
-            <span class="key">F / Click</span> Tỏa Sáng (Pulse) &nbsp;|&nbsp;
-            Kéo chuột để xoay camera
+        <div class="bottom-bar">
+            <div style="font-size: 13px; color: #8FA3B8;">
+                <span style="color:#F2C14E;">Shift</span> Lướt &nbsp;|&nbsp;
+                <span style="color:#F2C14E;">F/Click</span> Tỏa Sáng (3 đom đóm) &nbsp;|&nbsp;
+                <span style="color:#F2C14E;">E</span> Nạp đèn
+            </div>
+
+            <div class="mote-bar-container">
+                <div style="font-size: 13px; font-weight: bold; color: #FFE9B0;">Túi Đom Đóm (<span id="motes-count">0</span>/10)</div>
+                <div class="mote-slots" id="mote-slots">
+                    <div class="mote-slot"></div><div class="mote-slot"></div>
+                    <div class="mote-slot"></div><div class="mote-slot"></div>
+                    <div class="mote-slot"></div><div class="mote-slot"></div>
+                    <div class="mote-slot"></div><div class="mote-slot"></div>
+                    <div class="mote-slot"></div><div class="mote-slot"></div>
+                </div>
+            </div>
+
+            <div class="cooldown-group">
+                <div class="cd-box" id="box-dash">
+                    <div class="cd-overlay" id="cd-dash-overlay"></div>
+                    <div>LƯỚT</div>
+                    <div id="cd-dash-txt" style="color:#4ade80;">Sẵn sàng</div>
+                </div>
+                <div class="cd-box" id="box-pulse">
+                    <div class="cd-overlay" id="cd-pulse-overlay"></div>
+                    <div>TỎA SÁNG</div>
+                    <div id="cd-pulse-txt" style="color:#4ade80;">Sẵn sàng</div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <div id="game-modal">
-        <h1 id="modal-title">CHIẾN THẮNG!</h1>
-        <p id="modal-desc">Bạn đã thắp sáng toàn bộ 5 Đèn Lồng Lớn! Sương đen tan biến, ánh bình minh trở lại với Đảo Bến.</p>
-        <p style="font-size: 24px; color: #ffbe3b; margin-bottom: 30px;">Tổng điểm: <span id="final-score">0</span></p>
-        <button class="restart-btn" onclick="restartGame()">Chơi Lại</button>
+    <!-- Intro Dialog -->
+    <div id="intro-modal" class="screen-modal" style="display:flex;">
+        <h1 id="intro-night-title" style="font-size: 40px; color: #FFE9B0; margin-bottom: 12px;">ĐÊM 1 — ĐẢO BẾN</h1>
+        <p id="intro-quote" style="font-size: 18px; max-width: 580px; text-align: center; color: #CBD5E1; line-height: 1.6; margin-bottom: 24px; font-style: italic;">
+            "Sương đen lại phủ kín bờ bến rồi, Mây ơi. Hãy gom đom đóm thắp lại 5 ngọn đèn lồng lớn để giữ ấm hòn đảo đêm nay..."
+        </p>
+        <button class="btn" onclick="startNight()">Bắt đầu</button>
+    </div>
+
+    <!-- Pause Menu -->
+    <div id="pause-modal" class="screen-modal">
+        <h1 style="font-size: 36px; color: #F2C14E; margin-bottom: 24px;">TẠM DỪNG</h1>
+        <button class="btn" onclick="togglePause()">Tiếp tục</button>
+        <button class="btn btn-secondary" onclick="restartNight()">Chơi lại Đêm này</button>
+        <button class="btn btn-secondary" onclick="showSettings()">Cài đặt</button>
+    </div>
+
+    <!-- End Night Modal -->
+    <div id="result-modal" class="screen-modal">
+        <h1 id="result-title" style="font-size: 44px; margin-bottom: 12px;">CHIẾN THẮNG!</h1>
+        <p id="result-desc" style="font-size: 18px; color: #CBD5E1; margin-bottom: 20px; text-align: center; max-width: 500px;"></p>
+        <p style="font-size: 22px; color: #F2C14E; margin-bottom: 28px;">Tổng điểm: <span id="result-score">0</span></p>
+        <div id="result-buttons">
+            <button class="btn" id="next-night-btn" onclick="goToNextNight()">Đêm Tiếp Theo</button>
+            <button class="btn btn-secondary" id="retry-night-btn" onclick="restartNight()">Thử Lại</button>
+        </div>
     </div>
 
     <script>
-        // Sound synthesis with Web Audio API (100% original, zero external files)
+        // Web Audio API Procedural Synthesizer
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         let audioCtx = null;
+        let masterVolume = parseFloat(localStorage.getItem('dao_vol') || '0.8');
+        let mouseSensitivity = parseFloat(localStorage.getItem('dao_sens') || '1.0');
+
         function initAudio() {
             if (!audioCtx) audioCtx = new AudioCtx();
             if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -122,506 +202,451 @@
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
             osc.connect(gain); gain.connect(audioCtx.destination);
+            gain.gain.setValueAtTime(0.25 * masterVolume, now);
 
             if (type === 'mote') {
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(587.33, now); // D5
-                osc.frequency.exponentialRampToValueAtTime(880, now + 0.12); // A5
-                gain.gain.setValueAtTime(0.2, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
-                osc.start(now); osc.stop(now + 0.12);
+                osc.type = 'sine'; osc.frequency.setValueAtTime(659, now);
+                osc.frequency.exponentialRampToValueAtTime(987, now + 0.1);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc.start(now); osc.stop(now + 0.1);
             } else if (type === 'deposit') {
-                osc.type = 'triangle';
-                osc.frequency.setValueAtTime(440, now);
-                osc.frequency.exponentialRampToValueAtTime(659.25, now + 0.18);
-                gain.gain.setValueAtTime(0.3, now);
-                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
-                osc.start(now); osc.stop(now + 0.18);
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(440, now);
+                osc.frequency.exponentialRampToValueAtTime(880, now + 0.15);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+                osc.start(now); osc.stop(now + 0.15);
             } else if (type === 'lit') {
-                [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
-                    const o = audioCtx.createOscillator();
-                    const g = audioCtx.createGain();
+                [523, 659, 784, 1046].forEach((f, i) => {
+                    const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
                     o.connect(g); g.connect(audioCtx.destination);
-                    o.type = 'sine'; o.frequency.setValueAtTime(freq, now + i * 0.08);
-                    g.gain.setValueAtTime(0.25, now + i * 0.08);
-                    g.gain.exponentialRampToValueAtTime(0.01, now + i * 0.08 + 0.35);
-                    o.start(now + i * 0.08); o.stop(now + i * 0.08 + 0.35);
+                    o.type = 'sine'; o.frequency.setValueAtTime(f, now + i * 0.08);
+                    g.gain.setValueAtTime(0.2 * masterVolume, now + i * 0.08);
+                    g.gain.exponentialRampToValueAtTime(0.01, now + i * 0.08 + 0.3);
+                    o.start(now + i * 0.08); o.stop(now + i * 0.08 + 0.3);
                 });
+            } else if (type === 'dash') {
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(300, now);
+                osc.frequency.exponentialRampToValueAtTime(100, now + 0.2);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+                osc.start(now); osc.stop(now + 0.2);
             } else if (type === 'pulse') {
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(200, now);
-                osc.frequency.exponentialRampToValueAtTime(60, now + 0.3);
-                gain.gain.setValueAtTime(0.35, now);
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(220, now);
+                osc.frequency.exponentialRampToValueAtTime(55, now + 0.3);
                 gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
                 osc.start(now); osc.stop(now + 0.3);
             } else if (type === 'hit') {
-                osc.type = 'square';
-                osc.frequency.setValueAtTime(150, now);
+                osc.type = 'square'; osc.frequency.setValueAtTime(120, now);
                 osc.frequency.exponentialRampToValueAtTime(40, now + 0.25);
-                gain.gain.setValueAtTime(0.35, now);
                 gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
                 osc.start(now); osc.stop(now + 0.25);
-            } else if (type === 'win') {
-                [523, 659, 784, 1046, 1318].forEach((f, i) => {
-                    const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
-                    o.connect(g); g.connect(audioCtx.destination);
-                    o.type = 'triangle'; o.frequency.setValueAtTime(f, now + i * 0.12);
-                    g.gain.setValueAtTime(0.3, now + i * 0.12);
-                    g.gain.exponentialRampToValueAtTime(0.01, now + i * 0.12 + 0.5);
-                    o.start(now + i * 0.12); o.stop(now + i * 0.12 + 0.5);
-                });
             }
         }
 
-        // Game Configuration matching Contract v1.0
-        const TUNING = {
-            playerSpeed: 6.0, carryCapacity: 10, lanternCost: 5, lanternCount: 5,
-            pickupRadius: 1.5, interactRadius: 2.5, pulseCost: 1, pulseRadius: 5.0,
-            pulseStunS: 3.0, pulsePushM: 2.0, pulseCooldownS: 2.0, safeRadius: 4.0,
-            shadeSpeed: 3.5, shadeHitRadius: 1.0, durationS: 300, maxFlames: 3,
-            invulnS: 1.5, hitDropRatio: 0.5,
-            score: { perMote: 10, perLantern: 100, perStun: 20, perSecondLeft: 1, perFlameLeft: 50 }
+        // Game Configuration & Night Data
+        const NIGHTS_CONFIG = {
+            1: { name: "Đêm 1 — Đảo Bến", quote: '"Sương đen lại phủ kín bờ bến rồi, Mây ơi. Hãy gom đom đóm thắp lại 5 ngọn đèn lồng lớn..."', duration: 300, lanterns: 5 },
+            2: { name: "Đêm 2 — Đảo Cau", quote: '"Đảo Cau được nối bởi cầu tre mỏng manh giữa biển mây. Cẩn thận Gió Lạc và tận dụng bục nhảy nhé!"', duration: 330, lanterns: 6 },
+            3: { name: "Đêm 3 — Đảo Chuông", quote: '"Đảo Chuông cao 3 tầng vách đứng, gió rít từng cơn. Hãy thắp sáng tháp chuông để đón bình minh!"', duration: 360, lanterns: 7 }
         };
 
-        // Game State
+        let currentNight = 1;
+        let totalCampaignScore = 0;
+        let isPaused = false;
+        let isPlaying = false;
+
         let gameState = {
-            playing: true, score: 0, timeLeft: TUNING.durationS, flames: TUNING.maxFlames,
-            carried: 0, invulnTimer: 0, pulseCooldown: 0, won: false
+            score: 0, timeLeft: 300, flames: 3, carried: 0,
+            dashCooldown: 0, pulseCooldown: 0, charmTimer: 0,
+            invulnTimer: 0, isDashing: 0
         };
 
-        // Three.js Scene Setup
+        // Scene Setup
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x060814);
-        scene.fog = new THREE.FogExp2(0x060814, 0.018);
+        scene.background = new THREE.Color(0x0E1430);
+        scene.fog = new THREE.FogExp2(0x1B2350, 0.018);
 
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         container.appendChild(renderer.domElement);
 
-        // Lighting
-        const ambientLight = new THREE.AmbientLight(0x1a2238, 1.2);
+        const ambientLight = new THREE.AmbientLight(0x1B2350, 0.7);
         scene.add(ambientLight);
-        const moonLight = new THREE.DirectionalLight(0x7090c0, 1.0);
+        const moonLight = new THREE.DirectionalLight(0x8FA3B8, 0.8);
         moonLight.position.set(40, 80, 30);
-        moonLight.castShadow = true;
-        moonLight.shadow.mapSize.width = 1024;
-        moonLight.shadow.mapSize.height = 1024;
         scene.add(moonLight);
 
-        // Island Mesh
-        const islandGeo = new THREE.CylinderGeometry(50, 48, 6, 48);
-        const islandMat = new THREE.MeshStandardMaterial({ color: 0x1e3328, roughness: 0.85, metalness: 0.1 });
-        const island = new THREE.Mesh(islandGeo, islandMat);
-        island.position.y = -3;
-        island.receiveShadow = true;
-        scene.add(island);
-
-        // Cloud Sea underneath
-        const cloudGeo = new THREE.PlaneGeometry(300, 300, 16, 16);
-        const cloudMat = new THREE.MeshStandardMaterial({ color: 0x0a1020, roughness: 1.0, transparent: true, opacity: 0.8 });
-        const cloudSea = new THREE.Mesh(cloudGeo, cloudMat);
-        cloudSea.rotation.x = -Math.PI / 2;
-        cloudSea.position.y = -6.5;
-        scene.add(cloudSea);
-
-        // Character Mây
+        // Player Mây Model
         const mayGroup = new THREE.Group();
-        // Robe Body
         const bodyGeo = new THREE.CylinderGeometry(0.3, 0.5, 1.2, 16);
-        const bodyMat = new THREE.MeshStandardMaterial({ color: 0x3b82f6, roughness: 0.7 });
+        const bodyMat = new THREE.MeshStandardMaterial({ color: 0xE8E2D0, roughness: 0.8 }); // Áo Mây
         const body = new THREE.Mesh(bodyGeo, bodyMat);
-        body.position.y = 0.6; body.castShadow = true;
-        mayGroup.add(body);
-        // Head
-        const headGeo = new THREE.SphereGeometry(0.28, 16, 16);
-        const headMat = new THREE.MeshStandardMaterial({ color: 0xffdfba, roughness: 0.5 });
-        const head = new THREE.Mesh(headGeo, headMat);
-        head.position.y = 1.35; head.castShadow = true;
-        mayGroup.add(head);
-        // Nón Lá (Conical Hat)
-        const hatGeo = new THREE.ConeGeometry(0.85, 0.45, 24, 1, true);
-        const hatMat = new THREE.MeshStandardMaterial({ color: 0xd4a373, roughness: 0.9, side: THREE.DoubleSide });
-        const hat = new THREE.Mesh(hatGeo, hatMat);
-        hat.position.y = 1.55; hat.castShadow = true;
-        mayGroup.add(hat);
-        // Mini Lantern hanging on hat
-        const miniLantern = new THREE.Mesh(
-            new THREE.BoxGeometry(0.15, 0.2, 0.15),
-            new THREE.MeshStandardMaterial({ color: 0xffaa33, emissive: 0xff8800, emissiveIntensity: 0.8 })
-        );
-        miniLantern.position.set(0.45, 1.25, 0);
-        mayGroup.add(miniLantern);
-        const miniLight = new THREE.PointLight(0xffaa33, 0.8, 6);
-        miniLight.position.set(0.45, 1.25, 0);
-        mayGroup.add(miniLight);
+        body.position.y = 0.6; mayGroup.add(body);
 
-        mayGroup.position.set(0, 0, 0);
+        const scarfGeo = new THREE.TorusGeometry(0.32, 0.08, 8, 16);
+        const scarfMat = new THREE.MeshStandardMaterial({ color: 0xC8102E }); // Khăn đỏ
+        const scarf = new THREE.Mesh(scarfGeo, scarfMat);
+        scarf.rotation.x = Math.PI/2; scarf.position.y = 1.15; mayGroup.add(scarf);
+
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 16), new THREE.MeshStandardMaterial({ color: 0xC9B48A }));
+        head.position.y = 1.35; mayGroup.add(head);
+
+        const hat = new THREE.Mesh(new THREE.ConeGeometry(0.85, 0.45, 24, 1, true), new THREE.MeshStandardMaterial({ color: 0xC9B48A, side: THREE.DoubleSide }));
+        hat.position.y = 1.55; mayGroup.add(hat);
+
+        const miniLan = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.2, 0.15), new THREE.MeshStandardMaterial({ color: 0xFFB347, emissive: 0xFFB347 }));
+        miniLan.position.set(0.45, 1.25, 0); mayGroup.add(miniLan);
+
         scene.add(mayGroup);
 
-        // Pulse Ring Visual
-        const pulseRingGeo = new THREE.RingGeometry(0.2, 0.4, 32);
-        const pulseRingMat = new THREE.MeshBasicMaterial({ color: 0xffd700, side: THREE.DoubleSide, transparent: true, opacity: 0 });
-        const pulseRing = new THREE.Mesh(pulseRingGeo, pulseRingMat);
-        pulseRing.rotation.x = -Math.PI / 2;
-        pulseRing.position.y = 0.1;
-        scene.add(pulseRing);
-        let pulseAnim = { active: false, radius: 0 };
+        // Pulse Ring
+        const pulseRing = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.4, 32), new THREE.MeshBasicMaterial({ color: 0xF2C14E, side: THREE.DoubleSide, transparent: true, opacity: 0 }));
+        pulseRing.rotation.x = -Math.PI / 2; pulseRing.position.y = 0.1; scene.add(pulseRing);
+        let pulseAnim = { active: false, r: 0 };
 
-        // 5 Lanterns
-        const lanterns = [];
-        for (let i = 0; i < 5; i++) {
-            const angle = i * (2 * Math.PI / 5);
-            const x = 25 * Math.sin(angle);
-            const z = 25 * Math.cos(angle);
+        // Entities Storage
+        let islandMeshes = [];
+        let lanterns = [];
+        let motes = [];
+        let shades = [];
+        let drifters = [];
+        let charms = [];
 
-            const lanGroup = new THREE.Group();
-            lanGroup.position.set(x, 0, z);
-
-            // Pillar base
-            const postGeo = new THREE.CylinderGeometry(0.35, 0.45, 3.2, 12);
-            const postMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.8 });
-            const post = new THREE.Mesh(postGeo, postMat);
-            post.position.y = 1.6; post.castShadow = true; post.receiveShadow = true;
-            lanGroup.add(post);
-
-            // Globe
-            const globeGeo = new THREE.SphereGeometry(0.7, 16, 16);
-            const globeMat = new THREE.MeshStandardMaterial({
-                color: 0x332211, emissive: 0x221100, emissiveIntensity: 0.2, roughness: 0.5
-            });
-            const globe = new THREE.Mesh(globeGeo, globeMat);
-            globe.position.y = 3.2;
-            lanGroup.add(globe);
-
-            // Roof
-            const roofGeo = new THREE.ConeGeometry(1.1, 0.5, 6);
-            const roofMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6 });
-            const roof = new THREE.Mesh(roofGeo, roofMat);
-            roof.position.y = 3.9;
-            lanGroup.add(roof);
-
-            // PointLight
-            const pLight = new THREE.PointLight(0xff9900, 0.4, 8);
-            pLight.position.y = 3.2;
-            lanGroup.add(pLight);
-
-            scene.add(lanGroup);
-            lanterns.push({
-                id: `L${i+1}`, x: x, z: z, group: lanGroup, globe: globe, light: pLight,
-                lit: false, deposited: 0
-            });
+        function clearWorld() {
+            islandMeshes.forEach(m => scene.remove(m)); islandMeshes = [];
+            lanterns.forEach(l => scene.remove(l.group)); lanterns = [];
+            motes.forEach(m => scene.remove(m.mesh)); motes = [];
+            shades.forEach(s => scene.remove(s.mesh)); shades = [];
+            drifters.forEach(d => scene.remove(d.mesh)); drifters = [];
+            charms.forEach(c => scene.remove(c.mesh)); charms = [];
         }
 
-        // Motes (Đom đóm)
-        const motes = [];
-        const moteGeo = new THREE.SphereGeometry(0.22, 12, 12);
-        const moteMat = new THREE.MeshStandardMaterial({
-            color: 0xfef08a, emissive: 0xeab308, emissiveIntensity: 1.2, roughness: 0.2
-        });
-        for (let i = 0; i < 25; i++) {
-            const r = 6 + Math.random() * 36;
-            const a = Math.random() * Math.PI * 2;
-            const mx = r * Math.sin(a);
-            const mz = r * Math.cos(a);
+        function buildMap(night) {
+            clearWorld();
 
-            const mMesh = new THREE.Mesh(moteGeo, moteMat);
-            mMesh.position.set(mx, 0.6, mz);
-            scene.add(mMesh);
-            motes.push({ mesh: mMesh, x: mx, z: mz, active: true, baseSeed: Math.random() * 10 });
+            if (night === 1) {
+                const isle = new THREE.Mesh(new THREE.CylinderGeometry(40, 38, 6, 48), new THREE.MeshStandardMaterial({ color: 0x2F5D50, roughness: 0.9 }));
+                isle.position.y = -3; scene.add(isle); islandMeshes.push(isle);
+                [
+                    [0, 0, 25], [23.8, 0, 7.7], [14.7, 0, -20.2], [-14.7, 0, -20.2], [-23.8, 0, 7.7]
+                ].forEach((p, i) => addLantern(`L${i+1}`, p[0], p[1], p[2]));
+            } else if (night === 2) {
+                const isleA = new THREE.Mesh(new THREE.CylinderGeometry(28, 26, 6, 36), new THREE.MeshStandardMaterial({ color: 0x2F5D50 }));
+                isleA.position.set(0, -3, 0); scene.add(isleA); islandMeshes.push(isleA);
+
+                const isleB = new THREE.Mesh(new THREE.CylinderGeometry(28, 26, 6, 36), new THREE.MeshStandardMaterial({ color: 0x2F5D50 }));
+                isleB.position.set(70, -3, 0); scene.add(isleB); islandMeshes.push(isleB);
+
+                const bridge = new THREE.Mesh(new THREE.BoxGeometry(18, 0.5, 4), new THREE.MeshStandardMaterial({ color: 0x6B4A2F }));
+                bridge.position.set(35, -0.25, 0); scene.add(bridge); islandMeshes.push(bridge);
+
+                [
+                    [0, 0, 20], [17, 0, -10], [-17, 0, -10], [70, 0, 20], [87, 0, -10], [53, 0, -10]
+                ].forEach((p, i) => addLantern(`L${i+1}`, p[0], p[1], p[2]));
+
+                addCharm("C1", 35, 0.5, 0);
+            } else if (night === 3) {
+                const tier0 = new THREE.Mesh(new THREE.CylinderGeometry(45, 43, 4, 48), new THREE.MeshStandardMaterial({ color: 0x2F5D50 }));
+                tier0.position.y = -2; scene.add(tier0); islandMeshes.push(tier0);
+
+                const tier1 = new THREE.Mesh(new THREE.CylinderGeometry(24, 24, 3, 32), new THREE.MeshStandardMaterial({ color: 0x2F5D50 }));
+                tier1.position.set(0, 1.5, 9); scene.add(tier1); islandMeshes.push(tier1);
+
+                const tier2 = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 3, 24), new THREE.MeshStandardMaterial({ color: 0x2F5D50 }));
+                tier2.position.set(0, 4.5, 0); scene.add(tier2); islandMeshes.push(tier2);
+
+                const tower = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 8, 16), new THREE.MeshStandardMaterial({ color: 0x5B5F6E }));
+                tower.position.set(0, 10, 0); scene.add(tower); islandMeshes.push(tower);
+
+                [
+                    [0, 6, 6], [18, 3, 10], [-18, 3, 10], [35, 0, -10], [-35, 0, -10], [20, 0, -35], [-20, 0, -35]
+                ].forEach((p, i) => addLantern(`L${i+1}`, p[0], p[1], p[2]));
+
+                addCharm("C1", 30, 0.5, 25);
+                addCharm("C2", -30, 0.5, 25);
+            }
+
+            // Motes
+            for (let i = 0; i < 20; i++) {
+                const a = (i * 2 * Math.PI) / 20;
+                const r = 12 + (i % 3) * 8;
+                addMote(r * Math.cos(a), 0.6, r * Math.sin(a));
+            }
         }
 
-        // Bóng Mực (Shades)
-        const shades = [];
-        const shadeGeo = new THREE.SphereGeometry(0.7, 16, 16);
-        for (let i = 0; i < 3; i++) {
-            const a = [0.5, 2.6, 4.7][i];
-            const sx = 30 * Math.sin(a);
-            const sz = 30 * Math.cos(a);
-
-            const sMat = new THREE.MeshStandardMaterial({
-                color: 0x110520, emissive: 0x4c1d95, emissiveIntensity: 0.4, roughness: 0.9
-            });
-            const sMesh = new THREE.Mesh(shadeGeo, sMat);
-            sMesh.position.set(sx, 0.8, sz);
-            scene.add(sMesh);
-            shades.push({
-                id: `S${i+1}`, mesh: sMesh, mat: sMat, x: sx, z: sz,
-                state: 'chase', stunTimer: 0
-            });
+        function addLantern(id, x, y, z) {
+            const g = new THREE.Group(); g.position.set(x, y, z);
+            const post = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 3, 10), new THREE.MeshStandardMaterial({ color: 0x5B5F6E }));
+            post.position.y = 1.5; g.add(post);
+            const globe = new THREE.Mesh(new THREE.SphereGeometry(0.65, 14, 14), new THREE.MeshStandardMaterial({ color: 0x5B5F6E, emissive: 0x111111 }));
+            globe.position.y = 3.0; g.add(globe);
+            const light = new THREE.PointLight(0xFFB347, 0.2, 8);
+            light.position.y = 3.0; g.add(light);
+            scene.add(g);
+            lanterns.push({ id, x, y, z, group: g, globe, light, lit: false, deposited: 0 });
         }
 
-        // Controls Input Handling
+        function addMote(x, y, z) {
+            const m = new THREE.Mesh(new THREE.SphereGeometry(0.25, 12, 12), new THREE.MeshStandardMaterial({ color: 0xFFF6C2, emissive: 0xFFE58A, emissiveIntensity: 1.2 }));
+            m.position.set(x, y, z); scene.add(m);
+            motes.push({ mesh: m, x, y, z, active: true });
+        }
+
+        function addCharm(id, x, y, z) {
+            const c = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.6, 0.1), new THREE.MeshStandardMaterial({ color: 0xC8102E, emissive: 0xF2C14E, emissiveIntensity: 0.5 }));
+            c.position.set(x, y, z); scene.add(c);
+            charms.push({ id, mesh: c, x, y, z, available: true });
+        }
+
+        // Controls
         const keys = {};
         window.addEventListener('keydown', (e) => {
-            initAudio();
-            keys[e.code] = true;
+            initAudio(); keys[e.code] = true;
             if (e.code === 'KeyE') handleInteract();
             if (e.code === 'KeyF') handlePulse();
+            if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') handleDash();
+            if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
         });
         window.addEventListener('keyup', (e) => { keys[e.code] = false; });
         window.addEventListener('click', () => { handlePulse(); });
 
-        // Mouse Camera Orbit
         let camYaw = 0, camPitch = 0.35, camDist = 9.0;
         let isMouseDown = false, prevMouseX = 0, prevMouseY = 0;
         window.addEventListener('mousedown', (e) => { isMouseDown = true; prevMouseX = e.clientX; prevMouseY = e.clientY; });
         window.addEventListener('mouseup', () => { isMouseDown = false; });
         window.addEventListener('mousemove', (e) => {
             if (!isMouseDown) return;
-            const dx = e.clientX - prevMouseX;
-            const dy = e.clientY - prevMouseY;
+            camYaw -= (e.clientX - prevMouseX) * 0.005 * mouseSensitivity;
+            camPitch = Math.max(0.1, Math.min(1.2, camPitch + (e.clientY - prevMouseY) * 0.005 * mouseSensitivity));
             prevMouseX = e.clientX; prevMouseY = e.clientY;
-            camYaw -= dx * 0.005;
-            camPitch = Math.max(0.1, Math.min(1.2, camPitch + dy * 0.005));
         });
 
-        // Player Actions
+        function handleDash() {
+            if (!isPlaying || isPaused || (gameState.dashCooldown > 0 && gameState.charmTimer <= 0)) return;
+            gameState.isDashing = 0.2;
+            gameState.dashCooldown = gameState.charmTimer > 0 ? 0 : 1.5;
+            playSound('dash');
+        }
+
+        function handlePulse() {
+            if (!isPlaying || isPaused || gameState.carried < 3 || gameState.pulseCooldown > 0) return;
+            gameState.carried -= 3;
+            gameState.pulseCooldown = 3.0;
+            playSound('pulse');
+            pulseAnim.active = true; pulseAnim.r = 0.2;
+            pulseRing.position.set(mayGroup.position.x, mayGroup.position.y + 0.1, mayGroup.position.z);
+            updateHUD();
+        }
+
         function handleInteract() {
-            if (!gameState.playing || gameState.carried <= 0) return;
-            let closest = null, minDist = TUNING.interactRadius;
-            lanterns.forEach(lan => {
-                const d = Math.hypot(mayGroup.position.x - lan.x, mayGroup.position.z - lan.z);
-                if (d <= minDist && !lan.lit) { minDist = d; closest = lan; }
+            if (!isPlaying || isPaused || gameState.carried <= 0) return;
+            let closest = null, minD = 2.0;
+            lanterns.forEach(l => {
+                const d = Math.hypot(mayGroup.position.x - l.x, mayGroup.position.z - l.z);
+                if (d <= minD && !l.lit) { minD = d; closest = l; }
             });
-
             if (closest) {
-                const needed = TUNING.lanternCost - closest.deposited;
-                const depositAmount = Math.min(gameState.carried, needed);
-                gameState.carried -= depositAmount;
-                closest.deposited += depositAmount;
+                const needed = 10 - closest.deposited;
+                const amt = Math.min(gameState.carried, needed);
+                gameState.carried -= amt;
+                closest.deposited += amt;
+                gameState.score += amt * 10;
                 playSound('deposit');
-
-                if (closest.deposited >= TUNING.lanternCost) {
+                if (closest.deposited >= 10) {
                     closest.lit = true;
-                    closest.globe.material.emissive.setHex(0xffaa22);
-                    closest.globe.material.emissiveIntensity = 1.5;
-                    closest.light.intensity = 3.5;
-                    closest.light.distance = 28;
-                    gameState.score += TUNING.score.perLantern;
+                    closest.globe.material.emissive.setHex(0xFFB347);
+                    closest.globe.material.emissiveIntensity = 2.0;
+                    closest.light.intensity = 3.0;
+                    gameState.score += 100;
                     playSound('lit');
-
-                    // Check Win
-                    const allLit = lanterns.every(l => l.lit);
-                    if (allLit) endGame(true);
+                    // Check win
+                    if (lanterns.every(l => l.lit)) endNight(true);
                 }
                 updateHUD();
             }
         }
 
-        function handlePulse() {
-            if (!gameState.playing || gameState.carried < TUNING.pulseCost || gameState.pulseCooldown > 0) return;
-            gameState.carried -= TUNING.pulseCost;
-            gameState.pulseCooldown = TUNING.pulseCooldownS;
-            playSound('pulse');
-
-            // Trigger ring animation
-            pulseAnim.active = true;
-            pulseAnim.radius = 0.2;
-            pulseRing.position.x = mayGroup.position.x;
-            pulseRing.position.z = mayGroup.position.z;
-
-            // Stun nearby shades
-            shades.forEach(s => {
-                const d = Math.hypot(mayGroup.position.x - s.x, mayGroup.position.z - s.z);
-                if (d <= TUNING.pulseRadius) {
-                    s.state = 'stunned';
-                    s.stunTimer = TUNING.pulseStunS;
-                    s.mat.emissive.setHex(0x38bdf8); // Ice blue stunned
-                    const dirX = d > 0.001 ? (s.x - mayGroup.position.x) / d : 1;
-                    const dirZ = d > 0.001 ? (s.z - mayGroup.position.z) / d : 0;
-                    s.x += dirX * TUNING.pulsePushM;
-                    s.z += dirZ * TUNING.pulsePushM;
-                    gameState.score += TUNING.score.perStun;
-                }
-            });
-            updateHUD();
-        }
-
         function updateHUD() {
             document.getElementById('motes-count').textContent = gameState.carried;
-            document.getElementById('lanterns-lit').textContent = lanterns.filter(l => l.lit).length;
-            document.getElementById('score-display').textContent = gameState.score;
+            document.getElementById('score-display').textContent = gameState.score + totalCampaignScore;
             document.getElementById('flames-display').textContent = '🔥'.repeat(Math.max(0, gameState.flames));
+            document.getElementById('lanterns-lit').textContent = lanterns.filter(l => l.lit).length;
+            document.getElementById('lanterns-total').textContent = lanterns.length;
 
             const m = Math.floor(gameState.timeLeft / 60);
             const s = Math.floor(gameState.timeLeft % 60);
-            document.getElementById('time-display').textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+            const timeEl = document.getElementById('time-display');
+            timeEl.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+            if (gameState.timeLeft <= 30) timeEl.classList.add('timer-warning');
+            else timeEl.classList.remove('timer-warning');
 
-            const pulseStatusEl = document.getElementById('pulse-status');
-            if (gameState.pulseCooldown > 0) {
-                pulseStatusEl.textContent = `${gameState.pulseCooldown.toFixed(1)}s`;
-                pulseStatusEl.style.color = '#f87171';
-            } else if (gameState.carried < TUNING.pulseCost) {
-                pulseStatusEl.textContent = 'Cần đom đóm';
-                pulseStatusEl.style.color = '#fbbf24';
-            } else {
-                pulseStatusEl.textContent = 'Sẵn sàng';
-                pulseStatusEl.style.color = '#4ade80';
-            }
+            // 10-slot bar
+            const slots = document.querySelectorAll('.mote-slot');
+            slots.forEach((el, idx) => {
+                if (idx < gameState.carried) el.classList.add('filled');
+                else el.classList.remove('filled');
+            });
 
-            // Interact Prompt
-            let nearUnlit = lanterns.some(l => !l.lit && Math.hypot(mayGroup.position.x - l.x, mayGroup.position.z - l.z) <= TUNING.interactRadius);
-            document.getElementById('interact-prompt').style.display = (nearUnlit && gameState.carried > 0) ? 'block' : 'none';
+            // CD Overlays
+            const dashPct = Math.min(100, (gameState.dashCooldown / 1.5) * 100);
+            document.getElementById('cd-dash-overlay').style.height = `${dashPct}%`;
+            document.getElementById('cd-dash-txt').textContent = gameState.dashCooldown > 0 ? `${gameState.dashCooldown.toFixed(1)}s` : 'Sẵn sàng';
+
+            const pulsePct = Math.min(100, (gameState.pulseCooldown / 3.0) * 100);
+            document.getElementById('cd-pulse-overlay').style.height = `${pulsePct}%`;
+            document.getElementById('cd-pulse-txt').textContent = gameState.pulseCooldown > 0 ? `${gameState.pulseCooldown.toFixed(1)}s` : (gameState.carried >= 3 ? 'Sẵn sàng' : 'Cần 3 đom');
+
+            // Interact prompt
+            const near = lanterns.find(l => !l.lit && Math.hypot(mayGroup.position.x - l.x, mayGroup.position.z - l.z) <= 2.0);
+            const promptEl = document.getElementById('interact-prompt');
+            if (near && gameState.carried > 0) {
+                promptEl.style.display = 'block';
+                document.getElementById('prompt-count').textContent = near.deposited;
+            } else promptEl.style.display = 'none';
+
+            // Ambient lighting adaptation
+            const litRatio = lanterns.filter(l => l.lit).length / Math.max(1, lanterns.length);
+            ambientLight.intensity = 0.15 + 0.55 * litRatio;
         }
 
-        function endGame(won) {
-            gameState.playing = false;
-            gameState.won = won;
-            const modal = document.getElementById('game-modal');
-            const title = document.getElementById('modal-title');
-            const desc = document.getElementById('modal-desc');
+        function startNight() {
+            document.getElementById('intro-modal').style.display = 'none';
+            document.getElementById('result-modal').style.display = 'none';
+            document.getElementById('pause-modal').style.display = 'none';
+            const cfg = NIGHTS_CONFIG[currentNight];
+            document.getElementById('night-display').textContent = currentNight;
+            gameState = {
+                score: 0, timeLeft: cfg.duration, flames: 3, carried: 0,
+                dashCooldown: 0, pulseCooldown: 0, charmTimer: 0, invulnTimer: 0, isDashing: 0
+            };
+            mayGroup.position.set(0, 0, 0);
+            buildMap(currentNight);
+            isPlaying = true; isPaused = false;
+            updateHUD();
+        }
+
+        function togglePause() {
+            if (!isPlaying) return;
+            isPaused = !isPaused;
+            document.getElementById('pause-modal').style.display = isPaused ? 'flex' : 'none';
+        }
+
+        function restartNight() {
+            startNight();
+        }
+
+        function endNight(won) {
+            isPlaying = false;
+            const resModal = document.getElementById('result-modal');
+            const title = document.getElementById('result-title');
+            const desc = document.getElementById('result-desc');
+            const nextBtn = document.getElementById('next-night-btn');
 
             if (won) {
-                const timeBonus = Math.floor(gameState.timeLeft) * TUNING.score.perSecondLeft;
-                const flameBonus = gameState.flames * TUNING.score.perFlameLeft;
-                gameState.score += timeBonus + flameBonus;
-                title.textContent = 'CHIẾN THẮNG!';
-                title.style.color = '#ffdd80';
-                desc.textContent = 'Tuyệt vời! Toàn bộ 5 Đèn Lồng Lớn đã rực sáng. Sương đen tan dần, bình minh đã trở lại trên Đảo Bến!';
-                playSound('win');
+                const bonus = Math.floor(gameState.timeLeft) * 2 + gameState.flames * 50;
+                gameState.score += bonus;
+                totalCampaignScore += gameState.score;
+                title.textContent = currentNight === 3 ? "BÌNH MINH ĐÃ TỚI!" : "HOÀN THÀNH ĐÊM " + currentNight;
+                title.style.color = "#F2C14E";
+                desc.textContent = currentNight === 3
+                    ? "Chúc mừng bạn đã cứu sống toàn bộ Đảo Đèn Lồng! Ánh sáng rực rỡ xua tan bóng đêm vĩnh hằng."
+                    : "Tất cả đèn lồng đã rực sáng! Hãy chuẩn bị hành trang bước sang hòn đảo tiếp theo.";
+                nextBtn.style.display = currentNight === 3 ? "none" : "inline-block";
             } else {
-                title.textContent = 'BẠN ĐÃ THUA';
-                title.style.color = '#f87171';
-                desc.textContent = gameState.flames <= 0 ? 'Mây đã kiệt sức trước Bóng Mực...' : 'Bình minh đã ló rạng mà các ngọn đèn chưa kịp thắp sáng...';
-                playSound('hit');
+                title.textContent = "BẠN ĐÃ THẤT BẠI";
+                title.style.color = "#FF5A5F";
+                desc.textContent = gameState.flames <= 0 ? "Mây đã cạn kiệt ngọn lửa..." : "Bình minh ló rạng mà đèn chưa kịp thắp...";
+                nextBtn.style.display = "none";
             }
 
-            document.getElementById('final-score').textContent = gameState.score;
-            modal.style.display = 'flex';
+            document.getElementById('result-score').textContent = gameState.score + totalCampaignScore;
+            resModal.style.display = 'flex';
         }
 
-        function restartGame() {
-            window.location.reload();
+        function goToNextNight() {
+            if (currentNight < 3) {
+                currentNight++;
+                const cfg = NIGHTS_CONFIG[currentNight];
+                document.getElementById('intro-night-title').textContent = cfg.name;
+                document.getElementById('intro-quote').textContent = cfg.quote;
+                document.getElementById('intro-modal').style.display = 'flex';
+                document.getElementById('result-modal').style.display = 'none';
+            }
         }
 
-        // Main Game Loop (60 FPS)
         let clock = new THREE.Clock();
         function animate() {
             requestAnimationFrame(animate);
-            const dt = Math.min(0.1, clock.getDelta());
+            const dt = Math.min(0.05, clock.getDelta());
 
-            if (gameState.playing) {
-                // Time Countdown
+            if (isPlaying && !isPaused) {
                 gameState.timeLeft = Math.max(0, gameState.timeLeft - dt);
-                if (gameState.timeLeft <= 0) endGame(false);
+                if (gameState.timeLeft <= 0) endNight(false);
 
-                // Pulse Cooldown
+                if (gameState.dashCooldown > 0) gameState.dashCooldown = Math.max(0, gameState.dashCooldown - dt);
                 if (gameState.pulseCooldown > 0) gameState.pulseCooldown = Math.max(0, gameState.pulseCooldown - dt);
-                if (gameState.invulnTimer > 0) {
-                    gameState.invulnTimer = Math.max(0, gameState.invulnTimer - dt);
-                    mayGroup.visible = (Math.floor(Date.now() / 100) % 2 === 0);
-                } else {
-                    mayGroup.visible = true;
-                }
+                if (gameState.charmTimer > 0) gameState.charmTimer = Math.max(0, gameState.charmTimer - dt);
 
-                // Player Movement
                 let moveX = 0, moveZ = 0;
                 if (keys['KeyW'] || keys['ArrowUp']) moveZ -= 1;
                 if (keys['KeyS'] || keys['ArrowDown']) moveZ += 1;
                 if (keys['KeyA'] || keys['ArrowLeft']) moveX -= 1;
                 if (keys['KeyD'] || keys['ArrowRight']) moveX += 1;
 
+                const speed = gameState.isDashing > 0 ? 14.0 : (gameState.charmTimer > 0 ? 7.2 : 6.0);
+                if (gameState.isDashing > 0) gameState.isDashing -= dt;
+
                 if (moveX !== 0 || moveZ !== 0) {
                     const len = Math.hypot(moveX, moveZ);
                     moveX /= len; moveZ /= len;
-
-                    // Relative to camera yaw
-                    const worldX = moveX * Math.cos(camYaw) + moveZ * Math.sin(camYaw);
-                    const worldZ = -moveX * Math.sin(camYaw) + moveZ * Math.cos(camYaw);
-
-                    mayGroup.position.x += worldX * TUNING.playerSpeed * dt;
-                    mayGroup.position.z += worldZ * TUNING.playerSpeed * dt;
-                    mayGroup.rotation.y = Math.atan2(worldX, worldZ);
+                    const wx = moveX * Math.cos(camYaw) + moveZ * Math.sin(camYaw);
+                    const wz = -moveX * Math.sin(camYaw) + moveZ * Math.cos(camYaw);
+                    mayGroup.position.x += wx * speed * dt;
+                    mayGroup.position.z += wz * speed * dt;
+                    mayGroup.rotation.y = Math.atan2(wx, wz);
                 }
 
-                // Clamp within island boundary
-                const distFromCenter = Math.hypot(mayGroup.position.x, mayGroup.position.z);
-                if (distFromCenter > 47) {
-                    mayGroup.position.x *= 47 / distFromCenter;
-                    mayGroup.position.z *= 47 / distFromCenter;
-                }
-
-                // Motes pickup & animation
-                const nowSec = clock.getElapsedTime();
+                // Pickup Motes
                 motes.forEach(m => {
                     if (!m.active) return;
-                    m.mesh.position.y = 0.5 + 0.15 * Math.sin(nowSec * 3 + m.baseSeed);
-                    const d = Math.hypot(mayGroup.position.x - m.x, mayGroup.position.z - m.z);
-                    if (d <= TUNING.pickupRadius && gameState.carried < TUNING.carryCapacity) {
-                        m.active = false;
-                        m.mesh.visible = false;
+                    if (Math.hypot(mayGroup.position.x - m.x, mayGroup.position.z - m.z) <= 1.0 && gameState.carried < 10) {
+                        m.active = false; m.mesh.visible = false;
                         gameState.carried++;
-                        gameState.score += TUNING.score.perMote;
                         playSound('mote');
                         updateHUD();
                     }
                 });
 
-                // Shades AI
-                shades.forEach(s => {
-                    if (s.state === 'stunned') {
-                        s.stunTimer -= dt;
-                        if (s.stunTimer <= 0) {
-                            s.state = 'chase';
-                            s.mat.emissive.setHex(0x4c1d95);
-                        }
-                    } else if (s.state === 'chase') {
-                        const d = Math.hypot(mayGroup.position.x - s.x, mayGroup.position.z - s.z);
-                        if (d > 0.01) {
-                            const step = Math.min(d, TUNING.shadeSpeed * dt);
-                            let nx = s.x + (mayGroup.position.x - s.x) / d * step;
-                            let nz = s.z + (mayGroup.position.z - s.z) / d * step;
-
-                            // Safe radius around lanterns
-                            lanterns.forEach(lan => {
-                                const dl = Math.hypot(nx - lan.x, nz - lan.z);
-                                if (dl < TUNING.safeRadius) {
-                                    nx = lan.x + (nx - lan.x) / dl * TUNING.safeRadius;
-                                    nz = lan.z + (nz - lan.z) / dl * TUNING.safeRadius;
-                                }
-                            });
-                            s.x = nx; s.z = nz;
-                        }
-
-                        // Damage Mây
-                        if (d <= TUNING.shadeHitRadius && gameState.invulnTimer <= 0) {
-                            gameState.flames--;
-                            const dropped = Math.floor(gameState.carried * TUNING.hitDropRatio);
-                            gameState.carried -= dropped;
-                            gameState.invulnTimer = TUNING.invulnS;
-                            playSound('hit');
-                            if (gameState.flames <= 0) endGame(false);
-                            updateHUD();
-                        }
+                // Pickup Charms
+                charms.forEach(c => {
+                    if (!c.available) return;
+                    if (Math.hypot(mayGroup.position.x - c.x, mayGroup.position.z - c.z) <= 1.0) {
+                        c.available = false; c.mesh.visible = false;
+                        gameState.charmTimer = 10.0;
+                        playSound('lit');
+                        updateHUD();
                     }
-                    s.mesh.position.set(s.x, 0.8 + 0.1 * Math.sin(nowSec * 4 + s.x), s.z);
                 });
 
-                // Pulse Ring Animation
+                // Pulse ring animation
                 if (pulseAnim.active) {
-                    pulseAnim.radius += dt * 14;
-                    pulseRing.scale.set(pulseAnim.radius, pulseAnim.radius, 1);
-                    pulseRing.material.opacity = Math.max(0, 1.0 - pulseAnim.radius / TUNING.pulseRadius);
-                    if (pulseAnim.radius >= TUNING.pulseRadius) {
-                        pulseAnim.active = false;
-                        pulseRing.material.opacity = 0;
-                    }
+                    pulseAnim.r += dt * 14;
+                    pulseRing.scale.set(pulseAnim.r, pulseAnim.r, 1);
+                    pulseRing.material.opacity = Math.max(0, 1 - pulseAnim.r / 5.0);
+                    if (pulseAnim.r >= 5.0) { pulseAnim.active = false; pulseRing.material.opacity = 0; }
                 }
 
                 updateHUD();
             }
 
             // Camera follow
-            const camX = mayGroup.position.x + camDist * Math.sin(camYaw) * Math.cos(camPitch);
-            const camY = mayGroup.position.y + camDist * Math.sin(camPitch) + 1.5;
-            const camZ = mayGroup.position.z + camDist * Math.cos(camYaw) * Math.cos(camPitch);
-            camera.position.set(camX, camY, camZ);
+            camera.position.set(
+                mayGroup.position.x + camDist * Math.sin(camYaw) * Math.cos(camPitch),
+                mayGroup.position.y + camDist * Math.sin(camPitch) + 1.5,
+                mayGroup.position.z + camDist * Math.cos(camYaw) * Math.cos(camPitch)
+            );
             camera.lookAt(mayGroup.position.x, mayGroup.position.y + 1.2, mayGroup.position.z);
-
             renderer.render(scene, camera);
         }
 
@@ -631,7 +656,6 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        updateHUD();
         animate();
     </script>
 </body>

@@ -1,18 +1,20 @@
-# Nhật ký sử dụng AI & Ước tính Token (Phase 1)
+# Nhật ký sử dụng AI & Ước tính Token (Phase 1 & 2)
 
 Dự án: **Đảo Đèn Lồng**
 Sinh viên: **Đoàn Văn Hiệp** — MSSV: **2A202603565**
 
-## 1. Ước tính Token & Chi phí Phase 1
-- **Mô hình sử dụng:** Gemini 3.8 Flash (High) / Claude Sonnet trên Lab Board.
-- **Tổng số Prompt gửi:** ~6 lượt.
-- **Ước tính Token đầu vào (Prompt):** ~15,000 tokens.
-- **Ước tính Token đầu ra (Completion):** ~6,500 tokens.
-- **Chi phí ước tính:** ~$0.02 - $0.05.
+## 1. Ước tính Token & Chi phí
 
-## 2. Chiến lược Quản lý & Tiết kiệm Token
-1. **Lập kế hoạch trước khi code:** Phân tích PRD-0 và Test Contract v1.0 kỹ lưỡng, xác định rõ các thông số `tuning` và quy ước tick trước khi cho AI viết code.
-2. **Kiến trúc tách rời (Decoupled Architecture):**
-   - Tách biệt hoàn toàn `src/core/engine.py` (Headless simulation) và `web/index.html` (3D visualization), giúp prompt không bị cồng kềnh khi sửa đổi logic.
-3. **Batch Tool Calls:** Gộp các thao tác đọc/ghi file và kiểm thử vào cùng một lượt (turn) để tránh gửi lặp context nhiều lần.
-4. **Harness ngắn gọn (`AGENTS.md`):** Giữ file quy tắc dưới 40 dòng, chỉ tập trung vào các quy ước bắt buộc của Test Contract.
+### Phase 1:
+- **Tokens Prompt:** ~15,000 | **Tokens Completion:** ~6,500
+- **Chi phí ước tính:** ~$0.03
+
+### Phase 2 (Ticket-02 — "Ba hòn đảo"):
+- **Tokens Prompt:** ~22,000 | **Tokens Completion:** ~8,500
+- **Chi phí ước tính:** ~$0.05
+- **Tổng cộng 2 Phase:** ~52,000 tokens (~$0.08)
+
+## 2. Chiến lược Tối ưu hóa Token trong Phase 2
+1. **Phân tích kỹ lưỡng thay đổi của Contract v1.1:** Xác định rõ sự khác biệt giữa v1.0 và v1.1 (thêm mảng bắt buộc `drifters`, `charms`, `motes`, cập nhật 12 bước tick, trạng thái chuẩn của Bóng Mực) trước khi viết mã.
+2. **Kế thừa kiến trúc Module:** Tiếp tục mở rộng `src/core/engine.py` mà không phải viết lại từ đầu, giữ trọn vẹn khả năng hồi quy (regression) cho các test Phase 1.
+3. **Phát hiện và sửa sớm xung đột hằng số:** Hằng số `lantern_cost` tăng từ 5 lên 10 và `pulse_cost` tăng từ 1 lên 3 được đối chiếu và cập nhật vào bộ test ngay lập tức, tránh các vòng lặp sửa lỗi tốn token.

@@ -1,12 +1,12 @@
 """
-Unit tests and scenario verification for Dao Den Long Headless Mode (Contract v1.0).
+Unit tests and scenario verification for Dao Den Long Headless Mode.
+Updated for Phase 2 standardized parameters (Ticket-02).
 """
 
 import json
 import os
 import subprocess
 import sys
-import tempfile
 import unittest
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -33,8 +33,10 @@ class TestDaoDenLongHeadless(unittest.TestCase):
         self.assertEqual(mote_events[0]["data"]["carried"], 1)
 
     def test_lantern_deposit_and_win(self):
+        # Note: In Phase 2, lantern_cost changed from 5 to 10.
+        # Adjusted carried to 10 to test full deposit and victory.
         scenario = {
-            "player": {"pos": [0, 0, 24.0], "carried": 5, "flames": 3},
+            "player": {"pos": [0, 0, 24.0], "carried": 10, "flames": 3},
             "random_motes": False,
             "random_shades": False,
             "motes": [],
@@ -62,14 +64,16 @@ class TestDaoDenLongHeadless(unittest.TestCase):
         over_events = [line for line in lines if line.get("name") == "game_over"]
 
         self.assertEqual(len(dep_events), 1)
-        self.assertEqual(dep_events[0]["data"]["amount"], 5)
+        self.assertEqual(dep_events[0]["data"]["amount"], 10)
         self.assertEqual(len(lit_events), 1)
         self.assertEqual(len(over_events), 1)
         self.assertEqual(over_events[0]["data"]["result"], "won")
 
     def test_pulse_stun_shade(self):
+        # Note: In Phase 2, pulse_cost changed from 1 to 3.
+        # Adjusted carried to 3 to satisfy activation cost.
         scenario = {
-            "player": {"pos": [0, 0, 0], "carried": 2, "flames": 3},
+            "player": {"pos": [0, 0, 0], "carried": 3, "flames": 3},
             "random_motes": False,
             "random_shades": False,
             "motes": [],
