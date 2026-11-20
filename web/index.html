@@ -465,14 +465,46 @@
                 addJumpPad(0, 3, 13, 0, 6, 5); // Launches up to Tier 2
             }
 
-            // Motes
-            for (let i = 0; i < 20; i++) {
-                const a = (i * 2 * Math.PI) / 20;
-                const r = 12 + (i % 3) * 8;
-                const mx = r * Math.cos(a);
-                const mz = r * Math.sin(a);
-                const gy = getGroundHeight(mx, mz) || 0.0;
-                addMote(mx, gy + 0.6, mz);
+            // Motes Distribution
+            if (night === 2) {
+                // Đảo Cau: cả 2 đảo A (0,0) và B (70,0) đều có đom đóm
+                [0.0, 70.0].forEach(cx => {
+                    // 4 điểm r = 10m
+                    for (let i = 0; i < 4; i++) {
+                        const a = (i * Math.PI) / 2;
+                        addMote(cx + 10 * Math.cos(a), 0.6, 10 * Math.sin(a));
+                    }
+                    // 8 điểm r = 22m
+                    for (let i = 0; i < 8; i++) {
+                        const a = (i * Math.PI) / 4;
+                        addMote(cx + 22 * Math.cos(a), 0.6, 22 * Math.sin(a));
+                    }
+                });
+            } else if (night === 3) {
+                // Tier 0 (r=34m)
+                for (let i = 0; i < 12; i++) {
+                    const a = (i * 2 * Math.PI) / 12;
+                    addMote(34 * Math.cos(a), 0.6, 34 * Math.sin(a));
+                }
+                // Tier 1 (r=18m, z>0)
+                for (let i = 0; i < 6; i++) {
+                    const a = ((i + 1) * Math.PI) / 7;
+                    addMote(18 * Math.cos(a), 3.6, 18 * Math.sin(a));
+                }
+                // Tier 2 (r=5m)
+                for (let i = 0; i < 4; i++) {
+                    const a = (i * Math.PI) / 2 + Math.PI / 4;
+                    addMote(5 * Math.cos(a), 6.6, 5 * Math.sin(a));
+                }
+            } else {
+                // Night 1
+                for (let i = 0; i < 20; i++) {
+                    const a = (i * 2 * Math.PI) / 20;
+                    const r = 12 + (i % 3) * 8;
+                    const mx = r * Math.cos(a);
+                    const mz = r * Math.sin(a);
+                    addMote(mx, 0.6, mz);
+                }
             }
 
             // Initial Shades
